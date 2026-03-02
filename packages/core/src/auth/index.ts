@@ -1,21 +1,36 @@
-import type { RepoGConfig } from '../types/index.js';
+import type { RepoGConfig as TypesRepoGConfig } from '../types/index.js';
+import {
+  loadConfig,
+  saveConfig as configSaveConfig,
+  clearConfig,
+  isConfigured as configIsConfigured,
+} from '../config/config.js';
 
 /**
  * Get the current RepoG configuration.
- *
+ * @deprecated Use loadConfig from config/config.js instead
  * @returns The current configuration
  */
-export function getConfig(): RepoGConfig {
-  throw new Error('Not implemented');
+export function getConfig(): TypesRepoGConfig {
+  const config = loadConfig();
+  return {
+    githubToken: config.githubPat,
+    geminiApiKey: config.geminiKey,
+    dbPath: config.dbPath,
+  };
 }
 
 /**
  * Save RepoG configuration.
- *
+ * @deprecated Use saveConfig from config/config.js instead
  * @param config - The configuration to save
  */
-export function saveConfig(_config: Partial<RepoGConfig>): void {
-  throw new Error('Not implemented');
+export function saveConfig(config: Partial<TypesRepoGConfig>): void {
+  configSaveConfig({
+    githubPat: config.githubToken ?? undefined,
+    geminiKey: config.geminiApiKey ?? undefined,
+    dbPath: config.dbPath,
+  });
 }
 
 /**
@@ -24,7 +39,7 @@ export function saveConfig(_config: Partial<RepoGConfig>): void {
  * @returns The decrypted GitHub token or null if not set
  */
 export function getGitHubToken(): string | null {
-  throw new Error('Not implemented');
+  return loadConfig().githubPat;
 }
 
 /**
@@ -33,8 +48,8 @@ export function getGitHubToken(): string | null {
  *
  * @param token - The GitHub PAT to store
  */
-export function setGitHubToken(_token: string): void {
-  throw new Error('Not implemented');
+export function setGitHubToken(token: string): void {
+  configSaveConfig({ githubPat: token });
 }
 
 /**
@@ -43,7 +58,7 @@ export function setGitHubToken(_token: string): void {
  * @returns The decrypted Gemini API key or null if not set
  */
 export function getGeminiApiKey(): string | null {
-  throw new Error('Not implemented');
+  return loadConfig().geminiKey;
 }
 
 /**
@@ -52,8 +67,8 @@ export function getGeminiApiKey(): string | null {
  *
  * @param apiKey - The Gemini API key to store
  */
-export function setGeminiApiKey(_apiKey: string): void {
-  throw new Error('Not implemented');
+export function setGeminiApiKey(apiKey: string): void {
+  configSaveConfig({ geminiKey: apiKey });
 }
 
 /**
@@ -62,12 +77,12 @@ export function setGeminiApiKey(_apiKey: string): void {
  * @returns True if both GitHub token and Gemini API key are set
  */
 export function isConfigured(): boolean {
-  throw new Error('Not implemented');
+  return configIsConfigured();
 }
 
 /**
  * Clear all stored credentials.
  */
 export function clearCredentials(): void {
-  throw new Error('Not implemented');
+  clearConfig();
 }

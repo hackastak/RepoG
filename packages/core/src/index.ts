@@ -12,20 +12,38 @@
 // Types
 export * from './types/index.js';
 
+// Config (encrypted credential storage)
+export {
+  saveConfig,
+  loadConfig,
+  clearConfig,
+  isConfigured,
+  getDefaultDbPath,
+  type ConfigData,
+  type SaveConfigResult,
+} from './config/config.js';
+
 // Database
 export { getDb, closeDb, migrate } from './db/index.js';
 export * from './db/schema.js';
+export * from './db/init.js';
 
-// Auth
+// GitHub Auth
+export * from './github/auth.js';
+
+// Gemini Auth
+export * from './gemini/auth.js';
+
+// Legacy Auth (re-exports for backwards compatibility)
+// Note: some functions have same names as config module but different signatures
 export {
   getConfig,
-  saveConfig,
   getGitHubToken,
   setGitHubToken,
   getGeminiApiKey,
   setGeminiApiKey,
-  isConfigured,
   clearCredentials,
+  // saveConfig and isConfigured are exported from config/config.js
 } from './auth/index.js';
 
 // Sync
