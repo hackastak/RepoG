@@ -1,5 +1,13 @@
 import type { SearchOptions, SearchResult } from '../types/index.js';
 
+// Export new vector search module
+export {
+  searchRepos,
+  type SearchFilters,
+  type SearchResult as VectorSearchResult,
+  type SearchQueryResult,
+} from './query.js';
+
 /**
  * Perform a semantic search across repositories.
  *

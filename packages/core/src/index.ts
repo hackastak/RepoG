@@ -82,7 +82,16 @@ export {
 } from './embed/index.js';
 
 // Search
-export { search, searchInRepo, findSimilarRepos, logQuery } from './search/index.js';
+export {
+  search,
+  searchInRepo,
+  findSimilarRepos,
+  logQuery,
+  searchRepos,
+  type SearchFilters,
+  type VectorSearchResult,
+  type SearchQueryResult,
+} from './search/index.js';
 
 // RAG
 export {
