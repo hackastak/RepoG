@@ -7,5 +7,6 @@ export {
   formatStars,
   formatSimilarity,
   truncateText,
+  formatRelativeTime,
   type WrapTextOptions,
 } from './format.js';

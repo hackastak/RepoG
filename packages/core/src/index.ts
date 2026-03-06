@@ -145,5 +145,19 @@ export {
   formatStars,
   formatSimilarity,
   truncateText,
+  formatRelativeTime,
   type WrapTextOptions,
 } from './utils/index.js';
+
+// Status
+export {
+  getStatus,
+  NotConfiguredError,
+  type RepoStats,
+  type SyncStats,
+  type EmbedStats,
+  type RateLimitStats,
+  type DbStats,
+  type StatusResult,
+} from './status/index.js';
+

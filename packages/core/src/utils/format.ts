@@ -102,3 +102,48 @@ export function truncateText(text: string, maxLength: number = 200): string {
   }
   return cleaned.slice(0, maxLength - 3) + '...';
 }
+
+/**
+ * Format a relative time string (e.g., "2 hours ago", "in 14 minutes").
+ *
+ * @param isoString - The ISO datetime string to format
+ * @returns formatted relative time string
+ */
+export function formatRelativeTime(isoString: string): string {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = diffMs / 1000;
+
+  if (diffMs >= 0) {
+    // Past
+    if (diffSec < 60) {
+      return 'just now';
+    }
+    const minutes = Math.floor(diffSec / 60);
+    if (minutes < 60) {
+      return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+      return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    }
+    const days = Math.floor(hours / 24);
+    return `${days} day${days !== 1 ? 's' : ''} ago`;
+  } else {
+    // Future
+    const absDiffSec = Math.abs(diffSec);
+    const minutes = Math.ceil(absDiffSec / 60); // Round up for "in X minutes" so 59.1s becomes 1 min
+
+    if (minutes < 60) {
+      return `in ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+      return `in ${hours} hour${hours !== 1 ? 's' : ''}`;
+    }
+    const days = Math.floor(hours / 24);
+    return `in ${days} day${days !== 1 ? 's' : ''}`;
+  }
+}
+

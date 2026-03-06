@@ -16,6 +16,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "pretest": "pnpm rebuild better-sqlite3",
     "test": "vitest run",
     "lint": "eslint src",
     "clean": "rm -rf dist"
