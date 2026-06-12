@@ -4,7 +4,7 @@
 
 ## Status
 
-`Draft` — proposed for V0.3.0 build (see [PRD_V0.3.0 §4.3, Open Question #5](../../../My_Notes/1.%20Projects/RepoG/PRD_V0.3.0.md))
+`Decided` (2026-06-12) — the **sole V0.3.0 deliverable**: full code base syncing ([ADR-008](./ADR-008-shell-to-system-git-for-deep-sync-cloning.md) / [ADR-009](./ADR-009-size-bounded-line-aware-chunking-for-code.md)) was deferred to V0.4.0 (2026-06-11), so V0.3.0 ships the TUI on its own. Confirmed by the developer: Bubbletea is the chosen framework; the added binary size and new dependencies are a calculated cost, far outweighed by the improved user experience. See [PRD_V0.3.0 §4.3, Open Question #5](../../../My_Notes/1.%20Projects/RepoG/PRD_V0.3.0.md).
 
 ---
 
@@ -120,7 +120,7 @@ Rationale:
 4. It is the **de-facto standard** for modern Go TUIs, so examples, docs, and longevity are strong.
 5. The one-time learning cost of the Elm pattern and the moderate binary growth are acceptable given the feature's goals; Option C fails the requirement and Option B's channel integration and styling are weaker.
 
-This is **Draft** pending confirmation (PRD Open Question #5 — including whether the TUI ships in `v0.3.0` or a follow-up `v0.3.1`).
+**Confirmed (2026-06-12):** the developer accepted this decision — the added binary size and new dependency cluster are a calculated cost, far outweighed by the improved user experience. The TUI ships in **`v0.3.0`** as that release's sole deliverable (resolving PRD Open Question #5).
 
 ---
 
@@ -141,7 +141,7 @@ This is **Draft** pending confirmation (PRD Open Question #5 — including wheth
 - **CLI parity** — the TUI must not become the *only* way to do anything; every action stays scriptable via subcommands.
 - **Honor `NO_COLOR`** and terminal capability detection.
 - **Don't duplicate business logic** — the TUI calls the same `internal/*` packages the commands do; keep it a thin presentation layer.
-- **Long-running ops** must stay cancellable from the UI (Ctrl-C) and clean up (ties to ADR-008 temp-dir cleanup during deep sync).
+- **Long-running ops** must stay cancellable from the UI (Ctrl-C) and clean up (ties to ADR-008 temp-dir cleanup during deep sync — relevant once deep sync lands in V0.4.0).
 
 > Reference this ADR from relevant code: `// See ADR-010 for why the TUI uses Bubbletea`
 
@@ -151,7 +151,7 @@ This is **Draft** pending confirmation (PRD Open Question #5 — including wheth
 
 | Stakeholder | Input | Impact on Decision |
 |---|---|---|
-| Developer (hackastak) | Pending — TUI framework + release packaging are PRD Open Question #5 | Confirm Bubbletea and whether TUI ships in v0.3.0 or v0.3.1 |
+| Developer (hackastak) | Confirmed (2026-06-12) — Bubbletea is the chosen framework; binary/dependency cost is a calculated trade-off outweighed by the UX gain; TUI ships in v0.3.0 | Decision accepted; resolves PRD Open Question #5 |
 | Claude Code | Reviewed existing terminal libs (survey/spinner/color) and the event-channel design in sync/embed | Recommended Bubbletea for its fit with event streams, component ecosystem, and styling |
 
 ---

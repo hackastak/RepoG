@@ -47,6 +47,7 @@ Create an ADR when making decisions about:
 
 - **Draft**: Under discussion, not yet finalized
 - **Decided**: Approved and currently in effect
+- **Deferred to vX.Y.Z**: Decision/analysis stands, but implementation is scheduled for a later release
 - **Superseded by ADR-XXX**: Replaced by a newer decision
 
 ## Index of ADRs
@@ -60,9 +61,9 @@ Create an ADR when making decisions about:
 | [ADR-005](./ADR-005-factory-pattern-with-self-registration-for-providers.md) | Factory Pattern with Self-Registration for Providers | Decided | 2026-04-04 |
 | [ADR-006](./ADR-006-cli-architecture-with-cobra.md) | CLI Architecture with Cobra | Decided | 2026-04-04 |
 | [ADR-007](./ADR-007-use-factory-tests-for-provider-packages.md) | Use Factory Tests for Provider Package Testing Strategy | Decided | 2026-04-04 |
-| [ADR-008](./ADR-008-shell-to-system-git-for-deep-sync-cloning.md) | Shell to System Git for Deep-Sync Cloning | Decided | 2026-06-10 |
-| [ADR-009](./ADR-009-size-bounded-line-aware-chunking-for-code.md) | Size-Bounded, Line-Aware Chunking for Source Code | Draft | 2026-06-10 |
-| [ADR-010](./ADR-010-use-bubbletea-for-the-tui.md) | Use Bubbletea for the Interactive TUI | Draft | 2026-06-10 |
+| [ADR-008](./ADR-008-shell-to-system-git-for-deep-sync-cloning.md) | Shell to System Git for Deep-Sync Cloning | Decided — deferred to V0.4.0 | 2026-06-10 |
+| [ADR-009](./ADR-009-size-bounded-line-aware-chunking-for-code.md) | Size-Bounded, Line-Aware Chunking for Source Code | Deferred to V0.4.0 | 2026-06-10 |
+| [ADR-010](./ADR-010-use-bubbletea-for-the-tui.md) | Use Bubbletea for the Interactive TUI | Decided (V0.3.0) | 2026-06-12 |
 
 ## References
 
