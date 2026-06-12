@@ -12,6 +12,16 @@
 
 V0.3.0 adds an interactive **TUI**: the bare `repog` command (no subcommand) should open a visual interface for browsing indexed repos, searching, asking questions, and driving sync/embed — instead of requiring users to memorize 9 subcommands and their flags.
 
+### Resolved UX decisions (2026-06-12)
+
+Confirmed with the developer before implementation began:
+
+1. **Navigation — tabbed dashboard.** A persistent top tab bar; switch views with `1`–`5` / `tab` (k9s / lazygit style), so every primary view is one keystroke away. Chosen over a menu drill-down or a list+detail sidebar.
+2. **Command coverage — all nine CLI commands**, not just the five MVP views. The tab bar hosts the five primary views (Repos · Search · Ask · Sync/Embed · Status); the remaining commands fold in contextually rather than each getting a tab:
+   - `recommend` and `summarize` → **per-repo actions** invoked from the Repos view (operate on the selected repo).
+   - `init` / `reconfig` → a **Settings** screen (reachable by key, not a numbered tab); the first-run setup flow is the same screen in its empty state.
+3. **First run — in-TUI setup flow.** When bare `repog` launches on a TTY but no config/credentials exist, the TUI detects this and walks the user through credential entry (textinput → keyring) rather than printing "run `repog init`". On a non-TTY it still degrades to CLI behavior.
+
 The current CLI uses **non-TUI** terminal libraries: `AlecAivazis/survey/v2` (interactive prompts during `init`/`reconfig`), `briandowns/spinner` (progress spinners), and `fatih/color` (colored output). None of these is a full-screen application framework — there is **no Bubbletea, tview, tcell, or tview** in `go.mod` today. This is a greenfield UI-framework decision.
 
 The TUI is a **presentation layer** over the existing internal packages (`sync`, `embed`, `search`, `ask`, `recommend`, `summarize`, `status`). Those packages already expose streaming **event channels** (e.g. `IngestRepos`, `RunEmbedPipeline` return `<-chan …Event`), which a reactive UI can consume directly for live progress.
