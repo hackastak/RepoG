@@ -27,8 +27,8 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	if app != nil && app.db != nil {
-		defer app.db.Close()
+	if db := app.db(); db != nil {
+		defer db.Close()
 	}
 
 	p := tea.NewProgram(
@@ -59,5 +59,5 @@ func loadAppContext() (app *appContext, needsSetup bool, err error) {
 		return nil, false, fmt.Errorf("open database: %w", err)
 	}
 
-	return &appContext{cfg: cfg, db: database}, false, nil
+	return &appContext{cfg: cfg, database: database}, false, nil
 }

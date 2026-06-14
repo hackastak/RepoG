@@ -14,8 +14,18 @@ import (
 // once when the TUI starts and passed to every view so they call the same
 // internal/* packages the CLI commands do (no duplicated business logic).
 type appContext struct {
-	cfg *config.Config
-	db  *sql.DB
+	cfg      *config.Config
+	database *sql.DB
+}
+
+// db returns the shared database handle, or nil when the install isn't
+// configured yet. It is nil-safe on the receiver so views can call it
+// unconditionally during the first-run/setup state.
+func (a *appContext) db() *sql.DB {
+	if a == nil {
+		return nil
+	}
+	return a.database
 }
 
 // rootModel is the top-level Elm model. It owns the tab bar and window size and
@@ -52,6 +62,9 @@ func newRootModel(app *appContext, needsSetup bool) rootModel {
 		m.views[t] = newPlaceholderView(t)
 	}
 	m.views[tabSettings] = newPlaceholderView(tabSettings)
+
+	// Real views (replacing placeholders as they land).
+	m.views[tabRepos] = newReposView(app)
 
 	if needsSetup {
 		m.active = tabSettings
