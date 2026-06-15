@@ -2,12 +2,15 @@ package tui
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/hackastak/repog/internal/config"
+	"github.com/hackastak/repog/internal/provider"
+	_ "github.com/hackastak/repog/internal/provider/gemini" // register the gemini embedding provider
 )
 
 // appContext holds the long-lived dependencies the views share. It is opened
@@ -16,6 +19,10 @@ import (
 type appContext struct {
 	cfg      *config.Config
 	database *sql.DB
+
+	// embed is the lazily-built embedding provider shared by Search and Ask.
+	// Use embedProvider() rather than touching this directly.
+	embed provider.EmbeddingProvider
 }
 
 // db returns the shared database handle, or nil when the install isn't
@@ -26,6 +33,30 @@ func (a *appContext) db() *sql.DB {
 		return nil
 	}
 	return a.database
+}
+
+// embedProvider lazily constructs and caches the embedding provider that the
+// Search and Ask views need. Construction is deferred (keyring/API-key access)
+// until a feature first requires it, so the TUI still launches when the install
+// is only partially configured. The cache lives on the shared *appContext, so
+// Search and Ask reuse one instance.
+func (a *appContext) embedProvider() (provider.EmbeddingProvider, error) {
+	if a == nil || a.cfg == nil {
+		return nil, fmt.Errorf("not configured")
+	}
+	if a.embed != nil {
+		return a.embed, nil
+	}
+	apiKey, err := config.GetAPIKeyForProvider(a.cfg.Embedding.Provider)
+	if err != nil {
+		return nil, fmt.Errorf("get API key: %w", err)
+	}
+	p, err := provider.NewEmbeddingProvider(a.cfg.Embedding, apiKey)
+	if err != nil {
+		return nil, fmt.Errorf("create embedding provider: %w", err)
+	}
+	a.embed = p
+	return p, nil
 }
 
 // rootModel is the top-level Elm model. It owns the tab bar and window size and
@@ -65,6 +96,7 @@ func newRootModel(app *appContext, needsSetup bool) rootModel {
 
 	// Real views (replacing placeholders as they land).
 	m.views[tabRepos] = newReposView(app)
+	m.views[tabSearch] = newSearchView(app)
 	m.views[tabStatus] = newStatusView(app)
 
 	if needsSetup {
@@ -87,25 +119,31 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Global keys are handled first; everything else is delegated to the
-		// active view so it can own its own input (text fields, tables, etc.).
-		switch msg.String() {
-		case "ctrl+c", "q":
-			// "q" quits only when the active view isn't capturing text input;
-			// for now (placeholder views) it is always safe.
+		// ctrl+c always quits. The other global keys (q to quit, tab/1-5 to
+		// switch) are suppressed while the active view is capturing free text,
+		// so typing a query doesn't quit the app or jump tabs. Everything else
+		// is delegated to the active view so it owns its own input.
+		if msg.String() == "ctrl+c" {
 			m.quitting = true
 			return m, tea.Quit
-		case "tab":
-			m.active = nextTab(m.active)
-			return m, m.views[m.active].Init()
-		case "shift+tab":
-			m.active = prevTab(m.active)
-			return m, m.views[m.active].Init()
-		case "1", "2", "3", "4", "5":
-			idx := int(msg.String()[0] - '1')
-			if idx < len(numberedTabs) {
-				m.active = numberedTabs[idx]
+		}
+		if !m.activeCapturesText() {
+			switch msg.String() {
+			case "q":
+				m.quitting = true
+				return m, tea.Quit
+			case "tab":
+				m.active = nextTab(m.active)
 				return m, m.views[m.active].Init()
+			case "shift+tab":
+				m.active = prevTab(m.active)
+				return m, m.views[m.active].Init()
+			case "1", "2", "3", "4", "5":
+				idx := int(msg.String()[0] - '1')
+				if idx < len(numberedTabs) {
+					m.active = numberedTabs[idx]
+					return m, m.views[m.active].Init()
+				}
 			}
 		}
 	}
@@ -160,11 +198,27 @@ func (m rootModel) renderTabBar() string {
 }
 
 func (m rootModel) renderHelp() string {
-	parts := []string{"tab/1-5 switch", "q quit"}
+	var parts []string
 	if vk := m.views[m.active].HelpKeys(); vk != "" {
-		parts = append([]string{vk}, parts...)
+		parts = append(parts, vk)
+	}
+	// While a text field is focused the global switch/quit keys are inert
+	// (they'd be typed into the field), so advertise only what actually works.
+	if m.activeCapturesText() {
+		parts = append(parts, "ctrl+c quit")
+	} else {
+		parts = append(parts, "tab/1-5 switch", "q quit")
 	}
 	return helpStyle.Render(strings.Join(parts, " · "))
+}
+
+// activeCapturesText reports whether the active view is currently capturing
+// free-text input, so the root model knows to defer plain keys to it.
+func (m rootModel) activeCapturesText() bool {
+	if tv, ok := m.views[m.active].(textInputView); ok {
+		return tv.capturingText()
+	}
+	return false
 }
 
 func tabLabel(num int, title string) string {

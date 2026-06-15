@@ -18,6 +18,14 @@ type view interface {
 	HelpKeys() string
 }
 
+// textInputView is an optional interface implemented by views that capture
+// free-text input (e.g. Search, Ask). The root model consults it before
+// treating plain keys as global shortcuts, so a focused text field isn't robbed
+// of "q", digits, or tab — only ctrl+c stays global while text is being typed.
+type textInputView interface {
+	capturingText() bool
+}
+
 // placeholderView is a stand-in used while the real views are built out. It
 // renders the tab title and a "coming soon" note so the shell is navigable and
 // testable before any view logic lands.
