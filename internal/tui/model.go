@@ -10,7 +10,16 @@ import (
 
 	"github.com/hackastak/repog/internal/config"
 	"github.com/hackastak/repog/internal/provider"
-	_ "github.com/hackastak/repog/internal/provider/gemini" // register the gemini embedding provider
+
+	// Register every provider so the embedding and generation providers resolve
+	// for whatever the user configured (Search needs embeddings, Ask also needs
+	// generation). Mirrors the blank imports in commands/init.go.
+	_ "github.com/hackastak/repog/internal/provider/anthropic"
+	_ "github.com/hackastak/repog/internal/provider/gemini"
+	_ "github.com/hackastak/repog/internal/provider/ollama"
+	_ "github.com/hackastak/repog/internal/provider/openai"
+	_ "github.com/hackastak/repog/internal/provider/openrouter"
+	_ "github.com/hackastak/repog/internal/provider/voyageai"
 )
 
 // appContext holds the long-lived dependencies the views share. It is opened
@@ -23,6 +32,10 @@ type appContext struct {
 	// embed is the lazily-built embedding provider shared by Search and Ask.
 	// Use embedProvider() rather than touching this directly.
 	embed provider.EmbeddingProvider
+
+	// llm is the lazily-built generation provider used by Ask. Use llmProvider()
+	// rather than touching this directly.
+	llm provider.LLMProvider
 }
 
 // db returns the shared database handle, or nil when the install isn't
@@ -56,6 +69,29 @@ func (a *appContext) embedProvider() (provider.EmbeddingProvider, error) {
 		return nil, fmt.Errorf("create embedding provider: %w", err)
 	}
 	a.embed = p
+	return p, nil
+}
+
+// llmProvider lazily constructs and caches the generation (LLM) provider the Ask
+// view needs. Like embedProvider, construction is deferred until first use so the
+// TUI still launches on a partially-configured install, and the result is cached
+// on the shared *appContext.
+func (a *appContext) llmProvider() (provider.LLMProvider, error) {
+	if a == nil || a.cfg == nil {
+		return nil, fmt.Errorf("not configured")
+	}
+	if a.llm != nil {
+		return a.llm, nil
+	}
+	apiKey, err := config.GetAPIKeyForProvider(a.cfg.Generation.Provider)
+	if err != nil {
+		return nil, fmt.Errorf("get API key: %w", err)
+	}
+	p, err := provider.NewLLMProvider(a.cfg.Generation, apiKey)
+	if err != nil {
+		return nil, fmt.Errorf("create generation provider: %w", err)
+	}
+	a.llm = p
 	return p, nil
 }
 
@@ -97,6 +133,7 @@ func newRootModel(app *appContext, needsSetup bool) rootModel {
 	// Real views (replacing placeholders as they land).
 	m.views[tabRepos] = newReposView(app)
 	m.views[tabSearch] = newSearchView(app)
+	m.views[tabAsk] = newAskView(app)
 	m.views[tabStatus] = newStatusView(app)
 
 	if needsSetup {

@@ -5,6 +5,16 @@ All notable changes to RepoG will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Interactive TUI** — running `repog` with no subcommand on a TTY now opens a full-screen, tabbed dashboard built with Bubbletea/Lipgloss/Bubbles (see [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md)). Switch primary views with `1`–`5` or `tab`. Implemented so far:
+  - **Repos** — multi-selectable table of indexed repositories
+  - **Status** — knowledge-base statistics and GitHub rate limit
+  - **Search** — semantic search with a query box and scrollable results
+- On a non-TTY (pipes/CI) `repog` continues to fall back to CLI/help and never blocks waiting for input; `NO_COLOR` is honored. Every existing subcommand keeps working unchanged — the TUI is a presentation layer over the same `internal/*` packages.
+
 ## [0.2.4] - 2026-04-27
 
 ### Fixed
@@ -105,6 +115,7 @@ Initial public release of RepoG, rewritten in Go.
   - CI pipeline with test coverage requirements
   - GoReleaser for automated releases
 
+[Unreleased]: https://github.com/hackastak/repog/compare/v0.2.4...HEAD
 [0.2.4]: https://github.com/hackastak/repog/releases/tag/v0.2.4
 [0.2.3]: https://github.com/hackastak/repog/releases/tag/v0.2.3
 [0.2.2]: https://github.com/hackastak/repog/releases/tag/v0.2.2
