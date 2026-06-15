@@ -2,11 +2,9 @@ package commands
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -16,7 +14,7 @@ import (
 	"github.com/hackastak/repog/internal/config"
 	"github.com/hackastak/repog/internal/db"
 	"github.com/hackastak/repog/internal/format"
-	"github.com/hackastak/repog/internal/github"
+	"github.com/hackastak/repog/internal/status"
 )
 
 var statusCmd = &cobra.Command{
@@ -32,32 +30,6 @@ func init() {
 	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Output as JSON")
 }
 
-// statusResult contains all status information.
-type statusResult struct {
-	Repos struct {
-		Total         int `json:"total"`
-		Owned         int `json:"owned"`
-		Starred       int `json:"starred"`
-		EmbeddedCount int `json:"embeddedCount"`
-		PendingEmbed  int `json:"pendingEmbed"`
-	} `json:"repos"`
-	Sync struct {
-		LastSyncedAt   *string `json:"lastSyncedAt"`
-		LastSyncStatus *string `json:"lastSyncStatus"`
-	} `json:"sync"`
-	Embed struct {
-		LastEmbeddedAt  *string `json:"lastEmbeddedAt"`
-		TotalChunks     int     `json:"totalChunks"`
-		TotalEmbeddings int     `json:"totalEmbeddings"`
-	} `json:"embed"`
-	RateLimit *github.RateLimitInfo `json:"rateLimit"`
-	DB        struct {
-		Path      string `json:"path"`
-		SizeBytes int64  `json:"sizeBytes"`
-		SizeMB    string `json:"sizeMb"`
-	} `json:"db"`
-	GeneratedAt string `json:"generatedAt"`
-}
 
 func runStatus(cmd *cobra.Command, args []string) error {
 	red := color.New(color.FgRed).SprintFunc()
@@ -89,143 +61,22 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		s.Start()
 	}
 
-	// Collect status in parallel
-	result := statusResult{}
-	result.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
+	ctx := context.Background()
 
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-
-	// Repo stats
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var total, owned, starred, embedded, pending int
-
-		row := database.QueryRow(`
-			SELECT
-				COUNT(*) as total,
-				SUM(CASE WHEN is_owned = 1 THEN 1 ELSE 0 END) as owned,
-				SUM(CASE WHEN is_starred = 1 THEN 1 ELSE 0 END) as starred,
-				SUM(CASE WHEN embedded_hash IS NOT NULL AND embedded_hash = pushed_at_hash THEN 1 ELSE 0 END) as embedded,
-				SUM(CASE WHEN embedded_hash IS NULL OR embedded_hash != pushed_at_hash THEN 1 ELSE 0 END) as pending
-			FROM repos
-		`)
-		_ = row.Scan(&total, &owned, &starred, &embedded, &pending)
-
-		mu.Lock()
-		result.Repos.Total = total
-		result.Repos.Owned = owned
-		result.Repos.Starred = starred
-		result.Repos.EmbeddedCount = embedded
-		result.Repos.PendingEmbed = pending
-		mu.Unlock()
-	}()
-
-	// Sync state
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var status, lastSynced sql.NullString
-
-		// Try sync_state table first
-		_ = database.QueryRow(`
-			SELECT status, last_synced_at
-			FROM sync_state
-			ORDER BY last_synced_at DESC
-			LIMIT 1
-		`).Scan(&status, &lastSynced)
-
-		// Fallback to repos table
-		if !lastSynced.Valid {
-			_ = database.QueryRow("SELECT MAX(synced_at) FROM repos").Scan(&lastSynced)
-			if lastSynced.Valid {
-				status.String = "completed"
-				status.Valid = true
-			}
+	// Gather local stats (fast, no network).
+	result, err := status.Collect(ctx, database, cfg.DBPath)
+	if err != nil {
+		if s != nil {
+			s.Stop()
 		}
+		fmt.Fprintln(os.Stderr, red("Status error:"), err)
+		os.Exit(1)
+	}
 
-		mu.Lock()
-		if lastSynced.Valid {
-			result.Sync.LastSyncedAt = &lastSynced.String
-		}
-		if status.Valid {
-			result.Sync.LastSyncStatus = &status.String
-		}
-		mu.Unlock()
-	}()
-
-	// Chunk counts
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var chunks int
-		_ = database.QueryRow("SELECT COUNT(*) FROM chunks").Scan(&chunks)
-
-		mu.Lock()
-		result.Embed.TotalChunks = chunks
-		mu.Unlock()
-	}()
-
-	// Embedding counts
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var embeddings int
-		_ = database.QueryRow("SELECT COUNT(*) FROM chunk_embeddings").Scan(&embeddings)
-
-		mu.Lock()
-		result.Embed.TotalEmbeddings = embeddings
-		mu.Unlock()
-	}()
-
-	// Last embedded
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var lastEmbedded sql.NullString
-		_ = database.QueryRow("SELECT MAX(embedded_at) FROM repos WHERE embedded_at IS NOT NULL").Scan(&lastEmbedded)
-
-		mu.Lock()
-		if lastEmbedded.Valid {
-			result.Embed.LastEmbeddedAt = &lastEmbedded.String
-		}
-		mu.Unlock()
-	}()
-
-	// GitHub rate limit
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pat, err := config.GetGitHubPAT()
-		if err != nil {
-			return
-		}
-
-		client := github.NewClient(pat)
-		rateLimit := github.GetRateLimitInfo(context.Background(), client)
-
-		mu.Lock()
-		result.RateLimit = rateLimit
-		mu.Unlock()
-	}()
-
-	// DB stats
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		info, err := os.Stat(cfg.DBPath)
-
-		mu.Lock()
-		result.DB.Path = cfg.DBPath
-		if err == nil {
-			result.DB.SizeBytes = info.Size()
-			result.DB.SizeMB = fmt.Sprintf("%.2f MB", float64(info.Size())/(1024*1024))
-		}
-		mu.Unlock()
-	}()
-
-	wg.Wait()
+	// GitHub rate limit is a network call; tolerate failure as "unavailable".
+	if pat, patErr := config.GetGitHubPAT(); patErr == nil {
+		result.RateLimit = status.FetchRateLimit(ctx, pat)
+	}
 
 	if s != nil {
 		s.Stop()

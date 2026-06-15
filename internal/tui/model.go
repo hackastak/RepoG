@@ -65,6 +65,7 @@ func newRootModel(app *appContext, needsSetup bool) rootModel {
 
 	// Real views (replacing placeholders as they land).
 	m.views[tabRepos] = newReposView(app)
+	m.views[tabStatus] = newStatusView(app)
 
 	if needsSetup {
 		m.active = tabSettings
