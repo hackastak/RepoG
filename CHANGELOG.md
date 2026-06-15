@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Repos** — multi-selectable table of indexed repositories
   - **Status** — knowledge-base statistics and GitHub rate limit
   - **Search** — semantic search with a query box and scrollable results
+  - **Ask** — RAG-based Q&A with a question box and an answer that streams in token-by-token, citing the repositories it drew from
 - On a non-TTY (pipes/CI) `repog` continues to fall back to CLI/help and never blocks waiting for input; `NO_COLOR` is honored. Every existing subcommand keeps working unchanged — the TUI is a presentation layer over the same `internal/*` packages.
 
 ## [0.2.4] - 2026-04-27
