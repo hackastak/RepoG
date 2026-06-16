@@ -134,6 +134,7 @@ func newRootModel(app *appContext, needsSetup bool) rootModel {
 	m.views[tabRepos] = newReposView(app)
 	m.views[tabSearch] = newSearchView(app)
 	m.views[tabAsk] = newAskView(app)
+	m.views[tabSync] = newSyncView(app)
 	m.views[tabStatus] = newStatusView(app)
 
 	if needsSetup {
@@ -149,6 +150,18 @@ func (m rootModel) Init() tea.Cmd {
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Streaming progress messages are delivered to the view that owns them even
+	// when another tab is active, so a long-running sync/embed or a streaming Ask
+	// answer keeps advancing after the user switches tabs. The owning view's
+	// Update re-issues the wait command that drives the stream, so the delivery
+	// has to land there rather than on m.active.
+	if rm, ok := msg.(routedMsg); ok {
+		target := rm.targetTab()
+		updated, cmd := m.views[target].Update(msg)
+		m.views[target] = updated
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width

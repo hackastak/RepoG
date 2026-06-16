@@ -244,6 +244,11 @@ type askDoneMsg struct {
 	err          error
 }
 
+// targetTab routes the streamed answer to the Ask view even if the user has
+// switched tabs mid-answer (see routedMsg).
+func (askChunkMsg) targetTab() tab { return tabAsk }
+func (askDoneMsg) targetTab() tab  { return tabAsk }
+
 // waitForAskMsg blocks on the stream channel and returns the next message. Each
 // askChunkMsg re-issues this command, draining the channel one message at a time
 // in order; the goroutine in runAskCmd sends a final askDoneMsg and stops.

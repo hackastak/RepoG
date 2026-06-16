@@ -26,6 +26,17 @@ type textInputView interface {
 	capturingText() bool
 }
 
+// routedMsg is implemented by messages that must reach a specific view even when
+// that view's tab isn't active. Streaming pipelines (Ask answers, Sync/Embed
+// progress) drain their channel with a wait command that is re-issued from the
+// owning view's Update; if such a message were delivered to whatever tab happens
+// to be active, the re-issue chain would break and the stream would strand the
+// moment the user switched tabs. The root model consults this before its normal
+// active-view delegation so background streams keep flowing across tab switches.
+type routedMsg interface {
+	targetTab() tab
+}
+
 // placeholderView is a stand-in used while the real views are built out. It
 // renders the tab title and a "coming soon" note so the shell is navigable and
 // testable before any view logic lands.
