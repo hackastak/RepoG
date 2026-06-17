@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Interactive TUI** — running `repog` with no subcommand on a TTY now opens a full-screen, tabbed dashboard built with Bubbletea/Lipgloss/Bubbles (see [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md)). Switch primary views with `1`–`5` or `tab`; open Settings with `S`. Implemented so far:
-  - **Repos** — multi-selectable table of indexed repositories
+  - **Repos** — multi-selectable table of indexed repositories with per-repo actions on the focused row: `s` streams an AI summary token-by-token, `r` recommends related repositories (the repo itself is dropped from its own results); both open a scrollable result pane that `esc` dismisses
   - **Status** — knowledge-base statistics and GitHub rate limit
   - **Search** — semantic search with a query box and scrollable results
   - **Ask** — RAG-based Q&A with a question box and an answer that streams in token-by-token, citing the repositories it drew from
