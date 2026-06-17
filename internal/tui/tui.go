@@ -27,16 +27,28 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	if db := app.db(); db != nil {
-		defer db.Close()
-	}
 
 	p := tea.NewProgram(
 		newRootModel(app, needsSetup),
 		tea.WithAltScreen(),
 	)
-	_, err = p.Run()
-	return err
+	finalModel, runErr := p.Run()
+
+	// Close the database. When the user completes first-run setup or reconfigures
+	// mid-session, the model adopts a freshly opened handle that differs from the
+	// initial app, so close whatever the final model holds as well. Closing the
+	// original too is harmless (a second Close is a no-op).
+	if app != nil {
+		if d := app.db(); d != nil {
+			_ = d.Close()
+		}
+	}
+	if rm, ok := finalModel.(rootModel); ok {
+		if d := rm.app.db(); d != nil {
+			_ = d.Close()
+		}
+	}
+	return runErr
 }
 
 // loadAppContext loads config and opens the database. A missing/unconfigured

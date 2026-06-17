@@ -115,27 +115,14 @@ type rootModel struct {
 }
 
 // newRootModel builds the root model. A nil app means "not configured yet" —
-// the UI starts on the first-run setup screen (built out in a later step).
+// the UI starts on the first-run setup screen (the Settings view in its empty
+// state).
 func newRootModel(app *appContext, needsSetup bool) rootModel {
 	m := rootModel{
 		app:        app,
 		needsSetup: needsSetup,
-		views:      make(map[tab]view),
+		views:      buildViews(app),
 	}
-
-	// Seed every tab with a placeholder view; real views replace these
-	// incrementally in later steps.
-	for _, t := range numberedTabs {
-		m.views[t] = newPlaceholderView(t)
-	}
-	m.views[tabSettings] = newPlaceholderView(tabSettings)
-
-	// Real views (replacing placeholders as they land).
-	m.views[tabRepos] = newReposView(app)
-	m.views[tabSearch] = newSearchView(app)
-	m.views[tabAsk] = newAskView(app)
-	m.views[tabSync] = newSyncView(app)
-	m.views[tabStatus] = newStatusView(app)
 
 	if needsSetup {
 		m.active = tabSettings
@@ -143,6 +130,20 @@ func newRootModel(app *appContext, needsSetup bool) rootModel {
 		m.active = tabRepos
 	}
 	return m
+}
+
+// buildViews constructs every view against the given app context. It is used at
+// startup and again after the Settings flow saves a new config, so the views
+// pick up the freshly configured providers/database.
+func buildViews(app *appContext) map[tab]view {
+	return map[tab]view{
+		tabRepos:    newReposView(app),
+		tabSearch:   newSearchView(app),
+		tabAsk:      newAskView(app),
+		tabSync:     newSyncView(app),
+		tabStatus:   newStatusView(app),
+		tabSettings: newSettingsView(app),
+	}
 }
 
 func (m rootModel) Init() tea.Cmd {
@@ -168,6 +169,21 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
+	case settingsDoneMsg:
+		// Setup/reconfig finished: adopt the new app context, rebuild every view
+		// so they use the configured providers/database, and drop the user on the
+		// Repos tab. The previous app's database (if any) is closed by Run.
+		m.app = msg.app
+		m.needsSetup = false
+		m.views = buildViews(msg.app)
+		m.active = tabRepos
+		return m, m.views[m.active].Init()
+
+	case settingsCancelledMsg:
+		// Reconfig aborted; return to the Repos tab without changing anything.
+		m.active = tabRepos
+		return m, m.views[m.active].Init()
+
 	case tea.KeyMsg:
 		// ctrl+c always quits. The other global keys (q to quit, tab/1-5 to
 		// switch) are suppressed while the active view is capturing free text,
@@ -188,6 +204,11 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "shift+tab":
 				m.active = prevTab(m.active)
 				return m, m.views[m.active].Init()
+			case "S":
+				// Settings is reached by key, not a numbered tab (ADR-010). Init
+				// resets the flow so it opens on the first step.
+				m.active = tabSettings
+				return m, m.views[tabSettings].Init()
 			case "1", "2", "3", "4", "5":
 				idx := int(msg.String()[0] - '1')
 				if idx < len(numberedTabs) {
@@ -257,7 +278,7 @@ func (m rootModel) renderHelp() string {
 	if m.activeCapturesText() {
 		parts = append(parts, "ctrl+c quit")
 	} else {
-		parts = append(parts, "tab/1-5 switch", "q quit")
+		parts = append(parts, "tab/1-5 switch", "S settings", "q quit")
 	}
 	return helpStyle.Render(strings.Join(parts, " · "))
 }

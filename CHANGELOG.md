@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Interactive TUI** — running `repog` with no subcommand on a TTY now opens a full-screen, tabbed dashboard built with Bubbletea/Lipgloss/Bubbles (see [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md)). Switch primary views with `1`–`5` or `tab`. Implemented so far:
+- **Interactive TUI** — running `repog` with no subcommand on a TTY now opens a full-screen, tabbed dashboard built with Bubbletea/Lipgloss/Bubbles (see [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md)). Switch primary views with `1`–`5` or `tab`; open Settings with `S`. Implemented so far:
   - **Repos** — multi-selectable table of indexed repositories
   - **Status** — knowledge-base statistics and GitHub rate limit
   - **Search** — semantic search with a query box and scrollable results
   - **Ask** — RAG-based Q&A with a question box and an answer that streams in token-by-token, citing the repositories it drew from
   - **Sync/Embed** — trigger a GitHub sync (`s`), an embedding pass (`e`), or both back-to-back (`a`), with live progress streamed from the existing ingest/embed event channels and a scrollable activity log
+  - **Settings & first-run setup** — a guided credential flow (GitHub token → embedding provider → generation provider → database path) that validates each credential against the live provider before saving to the keyring/config, mirroring `repog init`/`reconfig`. Launching the bare `repog` on a TTY with no usable config drops straight into this flow; once configured it is reachable any time with `S` to reconfigure. Not a numbered tab (ADR-010 UX decision #3).
 - On a non-TTY (pipes/CI) `repog` continues to fall back to CLI/help and never blocks waiting for input; `NO_COLOR` is honored. Every existing subcommand keeps working unchanged — the TUI is a presentation layer over the same `internal/*` packages.
 
 ### Fixed
