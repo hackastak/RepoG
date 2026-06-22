@@ -1,0 +1,37 @@
+package tui
+
+import tea "github.com/charmbracelet/bubbletea"
+
+// view is the contract every tab's content implements. It mirrors the
+// bubbletea.Model shape but is scoped to a single tab so the root model can
+// delegate Update/View to the active tab.
+type view interface {
+	// Init returns an optional initial command (e.g. a data load).
+	Init() tea.Cmd
+	// Update handles a message and returns the updated view + any command.
+	Update(msg tea.Msg) (view, tea.Cmd)
+	// View renders the body for the given inner width/height (already excludes
+	// the tab bar and help line).
+	View(width, height int) string
+	// HelpKeys returns short contextual key hints for the bottom help line.
+	HelpKeys() string
+}
+
+// textInputView is an optional interface implemented by views that capture
+// free-text input (e.g. Search, Ask). The root model consults it before
+// treating plain keys as global shortcuts, so a focused text field isn't robbed
+// of "q", digits, or tab — only ctrl+c stays global while text is being typed.
+type textInputView interface {
+	capturingText() bool
+}
+
+// routedMsg is implemented by messages that must reach a specific view even when
+// that view's tab isn't active. Streaming pipelines (Ask answers, Sync/Embed
+// progress) drain their channel with a wait command that is re-issued from the
+// owning view's Update; if such a message were delivered to whatever tab happens
+// to be active, the re-issue chain would break and the stream would strand the
+// moment the user switched tabs. The root model consults this before its normal
+// active-view delegation so background streams keep flowing across tab switches.
+type routedMsg interface {
+	targetTab() tab
+}

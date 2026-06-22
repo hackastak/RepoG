@@ -5,6 +5,27 @@ All notable changes to RepoG will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.0] - 2026-06-18
+
+This release ships the interactive TUI as its sole deliverable. Full code base syncing (deep clone-based ingestion) was split out to a future release; see [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md).
+
+### Added
+
+- **Interactive TUI** — running `repog` with no subcommand on a TTY now opens a full-screen, tabbed dashboard built with Bubbletea/Lipgloss/Bubbles (see [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md)). Switch primary views with `1`–`5` or `tab`; open Settings with `S`. Implemented so far:
+  - **Repos** — multi-selectable table of indexed repositories with per-repo actions on the focused row: `s` streams an AI summary token-by-token, `r` recommends related repositories (the repo itself is dropped from its own results); both open a scrollable result pane that `esc` dismisses
+  - **Status** — knowledge-base statistics and GitHub rate limit
+  - **Search** — semantic search with a query box and scrollable results
+  - **Ask** — RAG-based Q&A with a question box and an answer that streams in token-by-token, citing the repositories it drew from
+  - **Sync/Embed** — trigger a GitHub sync (`s`), an embedding pass (`e`), or both back-to-back (`a`), with live progress streamed from the existing ingest/embed event channels and a scrollable activity log
+  - **Settings & first-run setup** — a guided credential flow (GitHub token → embedding provider → generation provider → database path) that validates each credential against the live provider before saving to the keyring/config, mirroring `repog init`/`reconfig`. Launching the bare `repog` on a TTY with no usable config drops straight into this flow; once configured it is reachable any time with `S` to reconfigure. Not a numbered tab (ADR-010 UX decision #3).
+- On a non-TTY (pipes/CI) `repog` continues to fall back to CLI/help and never blocks waiting for input; `NO_COLOR` is honored. Every existing subcommand keeps working unchanged — the TUI is a presentation layer over the same `internal/*` packages.
+
+### Fixed
+
+- TUI streaming views (Ask, Sync/Embed) now keep advancing after the user switches tabs. Pipeline/token events are routed to the view that owns them rather than to whichever tab is active, so a long-running sync or a streaming answer no longer stalls when you navigate away and back.
+
 ## [0.2.4] - 2026-04-27
 
 ### Fixed
@@ -105,6 +126,8 @@ Initial public release of RepoG, rewritten in Go.
   - CI pipeline with test coverage requirements
   - GoReleaser for automated releases
 
+[Unreleased]: https://github.com/hackastak/repog/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/hackastak/repog/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/hackastak/repog/releases/tag/v0.2.4
 [0.2.3]: https://github.com/hackastak/repog/releases/tag/v0.2.3
 [0.2.2]: https://github.com/hackastak/repog/releases/tag/v0.2.2

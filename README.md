@@ -11,6 +11,7 @@ AI-powered knowledge base for your GitHub repositories.
 RepoG is a CLI tool that syncs your GitHub repositories to a local knowledge base, generates vector embeddings, and enables semantic search, Q&A, and AI-powered recommendations across your entire codebase.
 
 **Key Features:**
+- Interactive terminal UI — run `repog` with no subcommand for a full-screen, tabbed dashboard
 - Sync owned and starred repositories to a local SQLite database
 - Generate vector embeddings with multiple providers (Gemini, OpenAI, Voyage AI, Ollama)
 - Semantic search across all your code using natural language
@@ -88,6 +89,39 @@ repog ask "Which repos use PostgreSQL?"
 repog recommend "building a CLI tool"
 ```
 
+## Interactive TUI
+
+Running `repog` with no subcommand on a terminal opens a full-screen, tabbed dashboard built with [Bubbletea](https://github.com/charmbracelet/bubbletea). It's a presentation layer over the same engine the CLI uses — everything below is still scriptable via the individual subcommands.
+
+```bash
+repog            # opens the TUI
+```
+
+**Tabs** (switch with `1`–`5` or `tab` / `shift+tab`):
+
+| Tab | What it does |
+|-----|--------------|
+| **Repos** | Browse and multi-select indexed repositories; run per-repo actions |
+| **Search** | Semantic search with a query box and scrollable results |
+| **Ask** | RAG-based Q&A; the answer streams in and cites the repos it drew from |
+| **Sync/Embed** | Trigger a sync, an embed, or both, with live progress |
+| **Status** | Knowledge-base statistics and GitHub rate limit |
+
+**Keys:**
+- `1`–`5` / `tab` / `shift+tab` — switch tabs
+- `S` — open Settings (credentials & providers); also the first-run setup flow
+- `q` / `ctrl+c` — quit
+
+**Repos tab actions:**
+- `space` — toggle selection on the focused row · `a` — toggle all
+- `s` — stream an AI summary of the focused repo · `r` — recommend related repos
+- `esc` — dismiss the result pane · `ctrl+r` — reload
+
+**Sync/Embed tab actions:**
+- `s` — sync · `e` — embed · `a` — sync then embed back-to-back
+
+On first launch with no saved credentials, the TUI drops straight into a guided setup flow that validates each credential before saving it — the same as `repog init`. On a non-TTY (piped output or CI), `repog` falls back to printing help and never waits for input; `NO_COLOR` is honored.
+
 ## Commands
 
 | Command | Description |
@@ -126,8 +160,8 @@ RepoG respects GitHub's rate limit of 5,000 requests per hour for authenticated 
 
 RepoG is under active development. Here's what's coming next:
 
+- **Full code base syncing** - Deep clone-based sync to index real source code, not just metadata and READMEs
 - **Performance** - Incremental syncing and re-ranking
-- **TUI** - Improve usability by building RepoG terminal user interface using Bubbletea
 - **Export capabilities** - Generate documentation and knowledge graphs from your repos
 - **Code analysis** - Dependency graphs, language statistics, and complexity metrics
 - **Multi-platform Git support** - GitLab, Bitbucket, and self-hosted Git servers

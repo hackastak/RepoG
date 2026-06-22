@@ -3,6 +3,8 @@ package commands
 
 import (
 	"github.com/spf13/cobra"
+
+	"github.com/hackastak/repog/internal/tui"
 )
 
 // version is set via ldflags during build
@@ -16,6 +18,17 @@ var rootCmd = &cobra.Command{
 knowledge base from their GitHub repositories. It ingests repo metadata,
 READMEs, and file trees; generates vector embeddings via Google Gemini;
 and supports natural language search, Q&A, recommendations, and summarization.`,
+	// Bare `repog` (no subcommand) launches the interactive TUI on a terminal.
+	// On a non-TTY (piped output / CI) it must not hang waiting for input, so it
+	// falls back to printing help. See ADR-010 for the non-TTY fallback rule.
+	RunE: runRoot,
+}
+
+func runRoot(cmd *cobra.Command, args []string) error {
+	if !tui.IsInteractive() {
+		return cmd.Help()
+	}
+	return tui.Run()
 }
 
 // Execute runs the root command.
