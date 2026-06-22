@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-18
+
+This release ships the interactive TUI as its sole deliverable. Full code base syncing (deep clone-based ingestion) was split out to a future release; see [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md).
+
 ### Added
 
 - **Interactive TUI** — running `repog` with no subcommand on a TTY now opens a full-screen, tabbed dashboard built with Bubbletea/Lipgloss/Bubbles (see [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md)). Switch primary views with `1`–`5` or `tab`; open Settings with `S`. Implemented so far:
@@ -122,7 +126,8 @@ Initial public release of RepoG, rewritten in Go.
   - CI pipeline with test coverage requirements
   - GoReleaser for automated releases
 
-[Unreleased]: https://github.com/hackastak/repog/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/hackastak/repog/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/hackastak/repog/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/hackastak/repog/releases/tag/v0.2.4
 [0.2.3]: https://github.com/hackastak/repog/releases/tag/v0.2.3
 [0.2.2]: https://github.com/hackastak/repog/releases/tag/v0.2.2
