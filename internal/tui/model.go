@@ -111,7 +111,6 @@ type rootModel struct {
 	needsSetup bool
 
 	quitting bool
-	err      error
 }
 
 // newRootModel builds the root model. A nil app means "not configured yet" —

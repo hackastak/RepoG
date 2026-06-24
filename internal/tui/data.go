@@ -50,7 +50,7 @@ func loadReposCmd(database *sql.DB) tea.Cmd {
 		if err != nil {
 			return reposLoadedMsg{err: err}
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var out []repoRow
 		for rows.Next() {

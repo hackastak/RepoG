@@ -127,7 +127,7 @@ func (v *statusView) View(width, height int) string {
 		b.WriteString("\n")
 	}
 	line := func(label, value string) {
-		b.WriteString(fmt.Sprintf("  %-16s %s\n", label+":", value))
+		fmt.Fprintf(&b, "  %-16s %s\n", label+":", value)
 	}
 
 	section("Repositories")
@@ -232,7 +232,7 @@ func renderLanguageBars(langs []status.LanguageStat, width int) string {
 	var b strings.Builder
 	for i, l := range langs {
 		if i >= maxRows {
-			b.WriteString(fmt.Sprintf("  …and %d more\n", len(langs)-maxRows))
+			fmt.Fprintf(&b, "  …and %d more\n", len(langs)-maxRows)
 			break
 		}
 		filled := int(l.Percent/100*float64(barW) + 0.5) // round to nearest cell
@@ -241,8 +241,8 @@ func renderLanguageBars(langs []status.LanguageStat, width int) string {
 		}
 		bar := filledStyle.Render(strings.Repeat("█", filled)) +
 			emptyStyle.Render(strings.Repeat("░", barW-filled))
-		b.WriteString(fmt.Sprintf("  %-*s %s %5.1f%% (%d)\n",
-			nameW, truncateName(l.Language, nameW), bar, l.Percent, l.Count))
+		fmt.Fprintf(&b, "  %-*s %s %5.1f%% (%d)\n",
+			nameW, truncateName(l.Language, nameW), bar, l.Percent, l.Count)
 	}
 	return b.String()
 }

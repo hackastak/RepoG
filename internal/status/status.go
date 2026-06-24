@@ -136,7 +136,7 @@ func collectLanguages(ctx context.Context, database *sql.DB, total int) ([]Langu
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []LanguageStat
 	for rows.Next() {

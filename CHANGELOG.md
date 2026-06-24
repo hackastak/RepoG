@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tests & Tooling
+
+- **Go rewrite remediation — test coverage.** Added white-box unit tests for the six provider subpackages (`internal/provider/{anthropic,gemini,openai,openrouter,ollama,voyageai}`), each previously at 0%, using `httptest`-mocked HTTP servers (no network). Per-package coverage: anthropic 90.7%, openrouter 89.0%, ollama 89.0%, voyageai 85.5%, gemini 82.3%, openai 78.5%. **Total statement coverage rose from 34.9% to 54.4%.** This is still below the 80% v1.0 target — the remaining gap is concentrated in the untested `cmd/repog` and `commands/` packages (0%) and the lower-covered `internal/provider` core (18.1%), `config` (52.1%), and `tui` (58.9%).
+- **Go rewrite remediation — lint.** Resolved all outstanding `golangci-lint` findings (`golangci-lint run` is now clean at 0 issues). The original 33 `errcheck` violations were already down to 2 (unchecked `rows.Close()` in `internal/status` and `internal/tui`); these plus a `gofmt`, three `staticcheck` (QF1012), and one `unused` field are now fixed.
+
 ## [0.3.0] - 2026-06-18
 
 This release ships the interactive TUI as its sole deliverable. Full code base syncing (deep clone-based ingestion) was split out to a future release; see [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md).

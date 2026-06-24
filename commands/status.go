@@ -30,7 +30,6 @@ func init() {
 	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Output as JSON")
 }
 
-
 func runStatus(cmd *cobra.Command, args []string) error {
 	red := color.New(color.FgRed).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
