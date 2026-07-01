@@ -17,8 +17,9 @@ RepoG chunks repository files into smaller pieces for embedding. Different embed
 | OpenAI `text-embedding-3-*` | 8,191 tokens | ~32,764 chars |
 | Voyage AI `voyage-code-3` | 16,000 tokens | ~64,000 chars |
 | Voyage AI `voyage-3` | 32,000 tokens | ~128,000 chars |
-| Gemini embedding models | 2,048 tokens | ~8,192 chars |
-| Ollama (varies by model) | 2,048 tokens | ~8,192 chars |
+| Gemini `gemini-embedding-2-preview` (default) | 8,192 tokens | ~32,768 chars |
+| Gemini `gemini-embedding-001` / `text-embedding-004` | 2,048 tokens | ~8,192 chars |
+| Ollama (varies by model) | 2,048–8,192 tokens | ~8,192–32,768 chars |
 
 **Problem:** Fixed chunk sizes cause issues:
 - Too large: Embedding API rejects chunks exceeding token limit (embedding failures)
@@ -84,10 +85,13 @@ RepoG chunks repository files into smaller pieces for embedding. Different embed
 
 **Example calculations:**
 ```
-OpenAI (8,191 tokens):  8191 * 0.90 * 3 = 22,113 chars
-Gemini (2,048 tokens):  2048 * 0.90 * 3 =  5,529 chars
-Voyage-3 (32K tokens): 32000 * 0.90 * 3 = 86,400 chars
+OpenAI (8,191 tokens):                            8191 * 0.90 * 3 = 22,113 chars
+Gemini gemini-embedding-2-preview (8,192 tokens): 8192 * 0.90 * 3 = 22,116 chars
+Gemini gemini-embedding-001 (2,048 tokens):       2048 * 0.90 * 3 =  5,529 chars
+Voyage-3 (32K tokens):                           32000 * 0.90 * 3 = 86,400 chars
 ```
+
+> Note: the formula uses Go integer truncation — `safeTokens := int(maxTokens * 0.90)`, then `* 3`. So `gemini-embedding-2-preview` yields `int(8192*0.90)=7372`, `7372*3 = 22,116` chars. See `CalculateMaxCharsFromTokens` in `internal/sync/ingest.go`.
 
 ---
 
@@ -160,7 +164,7 @@ The efficiency trade-off (using ~75% vs. ~95% of capacity) is acceptable because
 **Positives:**
 - Users never experience "token limit exceeded" errors
 - Automatically optimizes for each model's capabilities
-- Voyage AI users get 15x larger chunks than Gemini users (86K vs. 5K)
+- Voyage AI `voyage-3` users get ~4x larger chunks than default Gemini users (86K vs. 22K), and up to ~15x vs. 2,048-token models (86K vs. 5K)
 - Simple codebase: no tokenizer integration, one arithmetic formula
 - Future models automatically supported (read token limit from provider metadata)
 - Clear user feedback when chunk size changes require re-sync
@@ -200,8 +204,8 @@ The efficiency trade-off (using ~75% vs. ~95% of capacity) is acceptable because
 - Supporting docs:
   - [DYNAMIC_CHUNKING.md](../../DYNAMIC_CHUNKING.md) - Detailed explanation and examples
 - Supporting code:
-  - `internal/sync/sync.go` - Chunk size calculation
-  - `internal/config/config.go` - Provider token limit metadata
+  - `internal/sync/ingest.go` - `CalculateMaxCharsFromTokens` (chunk size formula) and `splitContent`
+  - `internal/provider/*/embedding.go` - per-model `MaxTokens` metadata (gemini, openai, openrouter, voyageai, ollama)
 - Provider documentation:
   - [OpenAI Embeddings](https://platform.openai.com/docs/guides/embeddings) - 8,191 token limit
   - [Voyage AI Docs](https://docs.voyageai.com/) - 16K and 32K limits

@@ -11,13 +11,15 @@ RepoG now automatically adjusts chunk sizes based on your configured embedding m
 When you run `repog sync`, the chunk size is calculated based on your embedding provider:
 
 ```
-Provider/Model              Token Limit    Chunk Size
-─────────────────────────────────────────────────────
-OpenAI text-embedding-3-*   8,191 tokens   22,113 chars
-Voyage AI voyage-code-3     16,000 tokens  43,200 chars
-Voyage AI voyage-3          32,000 tokens  86,400 chars
-Gemini embedding models     2,048 tokens    5,529 chars
-Ollama (varies)             2,048 tokens    5,529 chars
+Provider/Model                       Token Limit    Chunk Size
+──────────────────────────────────────────────────────────────
+OpenAI text-embedding-3-*            8,191 tokens   22,113 chars
+Voyage AI voyage-code-3              16,000 tokens  43,200 chars
+Voyage AI voyage-3                   32,000 tokens  86,400 chars
+Gemini gemini-embedding-2-preview    8,192 tokens   22,116 chars   (default)
+Gemini gemini-embedding-001          2,048 tokens    5,529 chars
+Ollama nomic-embed-text              8,192 tokens   22,116 chars
+Ollama (varies by model)             256–8,192 tk    690–22,116 ch
 ```
 
 **Formula**: `(maxTokens * 0.90) * 3 = maxChars`
@@ -34,7 +36,7 @@ If you switch to a provider with a **different chunk size**, RepoG will:
    ⚠️  Warning: Embedding configuration has changed
 
      Previous: openrouter (openai/text-embedding-3-small, 1536d)
-     New:      gemini (gemini-embedding-2-preview, 768d)
+     New:      gemini (gemini-embedding-001, 3072d)
 
      ⚠️  Chunk size will change:
         Previous: 22,113 characters
@@ -57,12 +59,12 @@ If you switch to a provider with a **different chunk size**, RepoG will:
 
 ## Example Scenarios
 
-### Scenario 1: OpenAI → Gemini (Lower Limit)
+### Scenario 1: OpenAI → Gemini gemini-embedding-001 (Lower Limit)
 
 ```bash
 $ ./repog reconfig embedding
 
-# Select Gemini
+# Select Gemini, model: gemini-embedding-001 (2,048 token limit)
 # Chunk size changes: 22,113 → 5,529 chars
 # Warning shown, data cleared
 
@@ -144,7 +146,7 @@ A: Depends on repo count and size. With GitHub API rate limits:
 **Q: Can I check chunk size without syncing?**
 A: Yes! Run `repog sync --verbose` and it shows:
 ```
-Using chunk size: 22113 characters (based on 8191 token limit)
+Using chunk size: 22116 characters (based on 8192 token limit)
 ```
 
 **Q: What if I manually change the config file?**
