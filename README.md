@@ -27,6 +27,14 @@ RepoG is a CLI tool that syncs your GitHub repositories to a local knowledge bas
 brew install hackastak/tap/repog
 ```
 
+To update to the latest release later:
+
+```bash
+brew upgrade hackastak/tap/repog
+```
+
+The binary is roughly 19MB — it statically links a C SQLite build and the [sqlite-vec](https://github.com/asg017/sqlite-vec) extension via CGO (see [ADR-001](docs/adr/ADR-001-use-sqlite-with-sqlite-vec-for-vector-storage.md)), so it is larger than a typical pure-Go CLI.
+
 ### Download Binary
 
 Download the latest release for your platform from the [Releases page](https://github.com/hackastak/repog/releases). See the [Changelog](CHANGELOG.md) for version history.
