@@ -10,7 +10,7 @@
 
 ## Context
 
-RepoG supports multiple AI providers (Gemini, OpenAI, OpenRouter, Ollama, Voyage AI) for both embedding and text generation. The system needs a clean way to:
+RepoG supports multiple AI providers for embedding and text generation: Gemini, OpenAI, OpenRouter, and Ollama support both; Voyage AI is embedding-only; Anthropic is text-generation-only. The system needs a clean way to:
 
 **Requirements:**
 - Allow each provider to be implemented independently

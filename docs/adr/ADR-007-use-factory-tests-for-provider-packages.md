@@ -4,7 +4,20 @@
 
 ## Status
 
-`Decided`
+`Superseded` — the original decision (Option A, factory tests only) was reversed during the post-0.3.0 "Go rewrite remediation." Comprehensive httptest-based unit tests (Option B) were subsequently added to all six provider subpackages. See the [Superseding update](#superseding-update-option-b-adopted) below; the rest of this ADR is retained as a historical record of the original reasoning.
+
+---
+
+## Superseding update: Option B adopted
+
+The pragmatic bet below — that thin HTTP wrappers did not warrant unit tests — did not hold. During the post-0.3.0 remediation the six provider subpackages (`anthropic`, `gemini`, `openai`, `openrouter`, `ollama`, `voyageai`), each previously at 0% coverage, gained white-box unit tests using `httptest`-mocked HTTP servers covering success paths, non-200 error handling, model fallback, and streaming. Per-package coverage now ranges roughly 78–91%, and total statement coverage rose from 34.9% to 54.4%.
+
+Consequences of this reversal versus the "Implications" recorded below:
+- HTTP error handling, fallback logic, and streaming behavior **are** now automatically tested.
+- Provider subpackages are no longer reported at 0% coverage.
+- The maintenance burden the ADR sought to avoid (mock fixtures tracking API changes) was accepted as worthwhile.
+
+The remaining historical sections describe the original Option A decision and are kept for context.
 
 ---
 

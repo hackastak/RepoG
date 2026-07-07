@@ -177,6 +177,6 @@ The performance trade-off (linear scan vs. HNSW) is acceptable because:
 - Related ADRs: None (foundational decision)
 - Technical docs: [sqlite-vec documentation](https://github.com/asg017/sqlite-vec)
 - Supporting code: `internal/db/db.go` - Database initialization and schema
-- Supporting code: `internal/search/search.go` - Vector similarity queries
+- Supporting code: `internal/search/query.go` - Vector similarity queries
 - Alternative: [pgvector](https://github.com/pgvector/pgvector) - Postgres extension
 - Alternative: [Chroma](https://www.trychroma.com/) - Dedicated vector database

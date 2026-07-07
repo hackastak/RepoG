@@ -57,9 +57,9 @@ RepoG is a command-line tool with multiple subcommands:
 
 ## Options
 
-### Option A: Cobra + Viper (Chosen)
+### Option A: Cobra (Chosen)
 
-**Approach:** Use `spf13/cobra` for command structure, `spf13/viper` for configuration
+**Approach:** Use `spf13/cobra` for command structure; configuration is handled by a custom keyring/YAML layer (see ADR-002), not Viper
 
 | Criterion | Score (★★★ = high) | Notes |
 |---|---|---|
@@ -78,7 +78,7 @@ RepoG is a command-line tool with multiple subcommands:
 - ✅ Command grouping and aliases
 - ✅ Extensive documentation and examples
 - ❌ Adds ~2MB to binary size
-- ❌ Viper's config management overkill for simple needs
+- ❌ Cobra's scaffolding is more than a tiny CLI strictly needs
 
 **Example:**
 ```go
@@ -168,7 +168,7 @@ func main() {
 
 ## Decision
 
-We chose **Option A (Cobra + Viper)** because it scores highest against our top priorities — developer experience, standard patterns, and feature completeness — and its bundle size is acceptable given:
+We chose **Option A (Cobra)** because it scores highest against our top priorities — developer experience, standard patterns, and feature completeness — and its bundle size is acceptable given:
 
 1. **Industry standard**: Used by kubectl, GitHub CLI, Hugo, and hundreds of popular Go CLI tools
 2. **Developer productivity**: Declarative commands, auto-generated help, minimal boilerplate
@@ -199,7 +199,7 @@ The bundle size trade-off (~2MB) is acceptable because:
 **Negatives / Trade-offs:**
 - Adds ~2MB to binary size
 - Learning curve for developers unfamiliar with Cobra
-- Viper's config management is more than we need (we use custom keyring config)
+- Configuration is intentionally handled by a custom keyring/YAML layer (see ADR-002) rather than Viper
 - Must follow Cobra conventions (can't easily deviate)
 
 **Watch out for:**
@@ -227,7 +227,7 @@ The bundle size trade-off (~2MB) is acceptable because:
 
 - Related ADRs: None
 - Library: [`spf13/cobra`](https://github.com/spf13/cobra) - CLI framework
-- Library: [`spf13/viper`](https://github.com/spf13/viper) - Configuration (minimal use in RepoG)
+- Configuration: custom keyring/YAML layer (see ADR-002) — Viper is intentionally not used
 - Supporting code:
   - `cmd/repog/main.go` - CLI entry point
   - `commands/*.go` - Individual command implementations
