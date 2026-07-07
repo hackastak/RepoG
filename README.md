@@ -152,6 +152,28 @@ repog sync --owned           # Sync only your own repositories
 repog sync --starred         # Sync only starred repositories
 ```
 
+### Reconfiguring
+
+```bash
+repog reconfig               # Reconfigure everything interactively
+repog reconfig github        # Update only your GitHub token
+repog reconfig embedding     # Switch or reconfigure the embedding provider
+repog reconfig generation    # Switch or reconfigure the generation (LLM) provider
+```
+
+### Summarizing a Repository
+
+```bash
+repog summarize facebook/react   # AI summary of a synced repo (owner/repo)
+```
+
+### Checking Status
+
+```bash
+repog status                 # Knowledge-base stats and GitHub rate limit
+repog status --json          # Same, as JSON for scripting
+```
+
 ## Data & Privacy
 
 - **Local First**: All data is stored locally in `~/.repog/repog.db`
