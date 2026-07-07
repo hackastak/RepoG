@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **Upgrade guide.** Added [`docs/UPGRADING.md`](docs/UPGRADING.md) covering version-to-version upgrade notes: keyring/credential behavior, the `reconfig` workflow introduced in v0.2.0, the automatic v0.1.x config migration, and the clear-on-change re-embed triggered by an embedding model or dimension change ([ADR-003](docs/adr/ADR-003-clear-on-change-strategy-for-embedding-migrations.md)). Linked from the README.
+
 ### Tests & Tooling
 
 - **Go rewrite remediation — test coverage.** Added white-box unit tests for the six provider subpackages (`internal/provider/{anthropic,gemini,openai,openrouter,ollama,voyageai}`), each previously at 0%, using `httptest`-mocked HTTP servers (no network). Per-package coverage: anthropic 90.7%, openrouter 89.0%, ollama 89.0%, voyageai 85.5%, gemini 82.3%, openai 78.5%. **Total statement coverage rose from 34.9% to 54.4%.** This is still below the 80% v1.0 target — the remaining gap is concentrated in the untested `cmd/repog` and `commands/` packages (0%) and the lower-covered `internal/provider` core (18.1%), `config` (52.1%), and `tui` (58.9%).

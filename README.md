@@ -218,6 +218,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 | Document | Description |
 |----------|-------------|
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Guide for contributors |
+| [UPGRADING.md](docs/UPGRADING.md) | Version-to-version upgrade and migration notes |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
 | [LICENSE](LICENSE) | MIT License |
 
