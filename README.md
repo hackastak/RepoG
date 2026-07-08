@@ -188,15 +188,14 @@ RepoG respects GitHub's rate limit of 5,000 requests per hour for authenticated 
 
 ## Roadmap
 
-RepoG is under active development. Here's what's coming next:
+RepoG is under active development. The road to `v1.0.0` includes:
 
 - **Full code base syncing** - Deep clone-based sync to index real source code, not just metadata and READMEs
-- **Performance** - Incremental syncing and re-ranking
+- **Incremental syncing** - Re-sync only what changed (a `v1.0.0` gate)
+- **Faster embeddings** - Better batching and parallelism
 - **Export capabilities** - Generate documentation and knowledge graphs from your repos
-- **Code analysis** - Dependency graphs, language statistics, and complexity metrics
-- **Multi-platform Git support** - GitLab, Bitbucket, and self-hosted Git servers
 
-See the [issues page](https://github.com/hackastak/repog/issues) for planned features and discussions.
+See the full [Roadmap](ROADMAP.md) for what's planned, what's after v1.0, and what's out of scope, or the [issues page](https://github.com/hackastak/repog/issues) for day-to-day work.
 
 ## Contributing
 
@@ -217,6 +216,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 | Document | Description |
 |----------|-------------|
+| [ROADMAP.md](ROADMAP.md) | Public roadmap and the path to v1.0 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Guide for contributors |
 | [UPGRADING.md](docs/UPGRADING.md) | Version-to-version upgrade and migration notes |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
