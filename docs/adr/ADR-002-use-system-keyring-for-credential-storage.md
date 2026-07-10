@@ -12,7 +12,7 @@
 
 RepoG requires API credentials to function:
 - GitHub Personal Access Token (PAT)
-- AI provider API keys (Gemini, OpenAI, OpenRouter)
+- AI provider API keys (Gemini, OpenAI, OpenRouter, Anthropic, Voyage AI)
 - (Optional) Ollama base URL for custom deployments
 
 These credentials must be:

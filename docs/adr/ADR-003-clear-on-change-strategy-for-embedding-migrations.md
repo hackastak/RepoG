@@ -221,6 +221,6 @@ The migration time trade-off is acceptable because:
   - [MULTI_MODEL_IMPLEMENTATION_SUMMARY.md](../../MULTI_MODEL_IMPLEMENTATION_SUMMARY.md) - Migration behavior
   - [DYNAMIC_CHUNKING.md](../../DYNAMIC_CHUNKING.md) - Similar chunking migration strategy
 - Supporting code:
-  - `internal/config/config.go` - Migration detection and warning system
-  - `internal/db/migrations.go` - Table recreation logic
-  - `commands/reconfig.go` - User warning and confirmation
+  - `commands/reconfig.go` - Migration detection (`embeddingChanged`), user warning/confirmation, and the `clearEmbeddings` table-recreation logic
+  - `internal/db/db.go` - `MigrateEmbeddingDimensions` table-recreation helper
+  - `internal/db/migrations.go` - Initial `chunk_embeddings` table creation (`CreateChunkEmbeddingsTableSQL`)

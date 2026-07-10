@@ -19,7 +19,7 @@ RepoG chunks repository files into smaller pieces for embedding. Different embed
 | Voyage AI `voyage-3` | 32,000 tokens | ~128,000 chars |
 | Gemini `gemini-embedding-2-preview` (default) | 8,192 tokens | ~32,768 chars |
 | Gemini `gemini-embedding-001` / `text-embedding-004` | 2,048 tokens | ~8,192 chars |
-| Ollama (varies by model) | 2,048–8,192 tokens | ~8,192–32,768 chars |
+| Ollama (varies by model) | 256–32,768 tokens | ~768–98,304 chars |
 
 **Problem:** Fixed chunk sizes cause issues:
 - Too large: Embedding API rejects chunks exceeding token limit (embedding failures)
