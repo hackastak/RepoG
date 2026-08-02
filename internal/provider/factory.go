@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/hackastak/repog/internal/config"
@@ -78,33 +77,9 @@ func GetModelDefaultMaxTokens(cfg config.ProviderConfig, apiKey string) (int, er
 	return provider.MaxTokens(), nil
 }
 
-// Ensure the wrapper implements EmbeddingProvider
+// Ensure the wrapper implements EmbeddingProvider. Every method other than
+// MaxTokens is promoted from the embedded interface.
 var _ EmbeddingProvider = (*maxTokensOverrideWrapper)(nil)
-
-// Explicitly implement all interface methods to ensure embedding works correctly
-func (w *maxTokensOverrideWrapper) Name() string {
-	return w.EmbeddingProvider.Name()
-}
-
-func (w *maxTokensOverrideWrapper) Dimensions() int {
-	return w.EmbeddingProvider.Dimensions()
-}
-
-func (w *maxTokensOverrideWrapper) BatchSize() int {
-	return w.EmbeddingProvider.BatchSize()
-}
-
-func (w *maxTokensOverrideWrapper) EmbedChunks(ctx context.Context, chunks []EmbedRequest) BatchEmbedResult {
-	return w.EmbeddingProvider.EmbedChunks(ctx, chunks)
-}
-
-func (w *maxTokensOverrideWrapper) EmbedQuery(ctx context.Context, query string) []float32 {
-	return w.EmbeddingProvider.EmbedQuery(ctx, query)
-}
-
-func (w *maxTokensOverrideWrapper) Validate(ctx context.Context) error {
-	return w.EmbeddingProvider.Validate(ctx)
-}
 
 // NewLLMProvider creates an LLMProvider based on config
 func NewLLMProvider(cfg config.ProviderConfig, apiKey string) (LLMProvider, error) {
