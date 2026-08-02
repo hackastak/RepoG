@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 )
 
@@ -44,6 +45,18 @@ type LLMError struct {
 	Message    string
 	StatusCode int
 }
+
+// Error implements the error interface, so callers can wrap LLM failures with %w
+// and recover the status code with errors.As — e.g. to distinguish a 429 that is
+// worth retrying from a 401 that never will be.
+func (e *LLMError) Error() string {
+	if e.StatusCode > 0 {
+		return fmt.Sprintf("llm request failed (status %d): %s", e.StatusCode, e.Message)
+	}
+	return fmt.Sprintf("llm request failed: %s", e.Message)
+}
+
+var _ error = (*LLMError)(nil)
 
 // Float32SliceToBytes converts a float32 slice to little-endian bytes.
 // This is used to store embeddings as BLOBs in SQLite.

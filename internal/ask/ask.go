@@ -5,12 +5,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/hackastak/repog/internal/provider"
 	"github.com/hackastak/repog/internal/search"
 )
+
+// maxSources caps how many repositories are cited alongside an answer.
+const maxSources = 5
 
 // AskOptions configures the Q&A query.
 type AskOptions struct {
@@ -50,7 +54,7 @@ func buildAskPrompt(question string, chunks []search.SearchResult) string {
 		formattedChunks = append(formattedChunks, fmt.Sprintf("--- %s (%s) ---\n%s", chunk.RepoFullName, chunk.ChunkType, chunk.Content))
 	}
 
-	context := strings.Join(formattedChunks, "\n\n")
+	contextBlock := strings.Join(formattedChunks, "\n\n")
 
 	return fmt.Sprintf(`Question: %s
 
@@ -58,7 +62,7 @@ Context from repositories:
 %s
 
 Answer the question based on the context above. If you reference specific
-repositories, mention them by name.`, question, context)
+repositories, mention them by name.`, question, contextBlock)
 }
 
 // buildSourceAttributions creates source attributions from search results.
@@ -76,13 +80,22 @@ func buildSourceAttributions(results []search.SearchResult) []SourceAttribution 
 		}
 	}
 
-	// Convert to slice and cap at 5
+	// Rank by similarity before capping. Map iteration order is randomized, so
+	// truncating during the range would cite an arbitrary subset rather than the
+	// strongest matches — and a different subset on every run.
 	sources := make([]SourceAttribution, 0, len(seen))
 	for _, s := range seen {
 		sources = append(sources, s)
-		if len(sources) >= 5 {
-			break
+	}
+	sort.Slice(sources, func(i, j int) bool {
+		if sources[i].Similarity != sources[j].Similarity {
+			return sources[i].Similarity > sources[j].Similarity
 		}
+		return sources[i].RepoFullName < sources[j].RepoFullName // stable tiebreak
+	})
+
+	if len(sources) > maxSources {
+		sources = sources[:maxSources]
 	}
 
 	return sources
@@ -145,8 +158,10 @@ func AskQuestion(ctx context.Context, opts AskOptions, onChunk func(string)) (As
 	result.DurationMs = time.Since(start).Milliseconds()
 
 	if llmErr != nil {
-		result.Answer = fmt.Sprintf("Error generating answer: %s", llmErr.Message)
-		return result, nil
+		// Sources are still attached: the retrieval half succeeded, and a caller
+		// showing a partial answer should be able to say what it drew from.
+		result.Sources = buildSourceAttributions(results)
+		return result, fmt.Errorf("generating answer: %w", llmErr)
 	}
 
 	result.Answer = llmResult.Text
