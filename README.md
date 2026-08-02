@@ -10,6 +10,8 @@ AI-powered knowledge base for your GitHub repositories.
 
 RepoG is a CLI tool that syncs your GitHub repositories to a local knowledge base, generates vector embeddings, and enables semantic search, Q&A, and AI-powered recommendations across your entire codebase.
 
+**Why it exists:** GitHub search matches strings, not intent — it can't answer "which of my repos already solved rate limiting?" And the repositories you starred two years ago are effectively lost the moment you forget their names. The hosted tools that *can* answer those questions want your source code on their servers. RepoG keeps the index on your machine: one SQLite file under `~/.repog/`, credentials in your OS keychain, and a provider you choose — including [Ollama](https://ollama.ai), which never sends a byte off the box. See [Architecture](#architecture) for how it's put together.
+
 **Key Features:**
 - Interactive terminal UI — run `repog` with no subcommand for a full-screen, tabbed dashboard
 - Sync owned and starred repositories to a local SQLite database
@@ -41,7 +43,7 @@ Download the latest release for your platform from the [Releases page](https://g
 
 ### From Source
 
-Requires Go 1.22+ and a C compiler (GCC or Clang) for CGO.
+Requires Go 1.25+ and a C compiler (GCC or Clang) for CGO.
 
 ```bash
 go install github.com/hackastak/repog/cmd/repog@latest
@@ -174,6 +176,84 @@ repog status                 # Knowledge-base stats and GitHub rate limit
 repog status --json          # Same, as JSON for scripting
 ```
 
+## Architecture
+
+RepoG is a Go CLI over a local SQLite database. There is no server, no daemon, and no
+hosted component — every command opens the same database file, does its work, and exits.
+
+### Data flow
+
+```
+repog sync                      repog embed                  repog search / ask / recommend
+─────────────                   ───────────                  ──────────────────────────────
+GitHub API                      unembedded chunks            query text
+    │  metadata, README,             │                            │
+    │  file tree                     │ provider-sized batches     │ embed as RETRIEVAL_QUERY
+    ▼                                ▼                            ▼
+chunk to fit the model's        embedding provider           vector search (sqlite-vec KNN)
+token limit                          │                            │
+    │                                │ 768–3072 dims              │ top-k chunks
+    ▼                                ▼                            ▼
+chunks table  ──────────────►   chunk_embeddings             prompt assembly ──► LLM provider
+(SQLite)                        (sqlite-vec virtual table)   (search / ask / recommend)
+```
+
+Chunk size is not fixed — it is derived from the configured embedding model's token limit,
+so chunks always fit the model being used ([docs/chunking.md](docs/chunking.md)).
+
+Both halves are incremental: a repo whose `pushed_at` hash is unchanged is skipped on sync,
+and one whose `embedded_hash` already matches is skipped on embed.
+
+### Packages
+
+| Package | Responsibility |
+|---|---|
+| `cmd/repog` | Entry point; delegates to `commands.Execute()` |
+| `commands/` | Cobra command definitions and terminal output |
+| `internal/tui/` | Bubble Tea TUI — a presentation layer over the same engine the CLI uses |
+| `internal/config/` | Config file (`~/.config/repog/config.yaml`) and keyring credential access |
+| `internal/db/` | SQLite handle, sqlite-vec registration, schema, migrations |
+| `internal/github/` | GitHub REST client; rate-limit aware (waits and retries on 429/403) |
+| `internal/provider/` | Provider abstraction — `EmbeddingProvider` / `LLMProvider` interfaces, plus one subpackage per vendor |
+| `internal/sync/` | Fetch → chunk → store pipeline; emits progress events on a channel |
+| `internal/embed/` | Batched embedding pipeline; emits progress events on a channel |
+| `internal/search/` | Vector similarity search over sqlite-vec |
+| `internal/ask/` | RAG Q&A — retrieve, assemble a grounded prompt, stream the answer |
+| `internal/recommend/` · `internal/summarize/` | Task-specific LLM flows over the same retrieval layer |
+| `internal/status/` · `internal/format/` | Stats collection and output formatting |
+
+The long-running pipelines (`sync`, `embed`) return a `<-chan Event` rather than printing,
+which is what lets the CLI render a spinner and the TUI render a live progress view over
+identical code.
+
+### Adding a provider
+
+Each vendor lives in its own subpackage and registers itself from `init()`, so the core
+never imports it directly and adding one touches no existing file:
+
+```go
+func init() {
+    provider.RegisterEmbeddingProvider("acme", func(cfg config.ProviderConfig, apiKey string) (provider.EmbeddingProvider, error) {
+        return NewAcmeEmbeddingProvider(apiKey, cfg.Model, cfg.Dimensions)
+    })
+}
+```
+
+Rationale and the import-cycle problem this solves are in [ADR-005](docs/adr/ADR-005-factory-pattern-with-self-registration-for-providers.md).
+
+### Design decisions
+
+The [ADR index](docs/adr/README.md) records the reasoning behind the choices that shaped
+the codebase — among them:
+
+| ADR | Decision |
+|---|---|
+| [ADR-001](docs/adr/ADR-001-use-sqlite-with-sqlite-vec-for-vector-storage.md) | SQLite + sqlite-vec for vector storage, rather than a vector database |
+| [ADR-002](docs/adr/ADR-002-use-system-keyring-for-credential-storage.md) | Credentials in the system keyring, never on disk |
+| [ADR-003](docs/adr/ADR-003-clear-on-change-strategy-for-embedding-migrations.md) | Clear-on-change when the embedding model changes, rather than partial migration |
+| [ADR-004](docs/adr/ADR-004-dynamic-chunking-based-on-model-token-limits.md) | Chunk size derived from the model's token limit — see [docs/chunking.md](docs/chunking.md) |
+| [ADR-010](docs/adr/ADR-010-use-bubbletea-for-the-tui.md) | Bubble Tea for the TUI |
+
 ## Data & Privacy
 
 - **Local First**: All data is stored locally in `~/.repog/repog.db`
@@ -216,6 +296,8 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 | Document | Description |
 |----------|-------------|
+| [ADR index](docs/adr/README.md) | Architecture Decision Records — why the codebase is the way it is |
+| [docs/chunking.md](docs/chunking.md) | How chunk size is derived, and what changes when you switch embedding models |
 | [ROADMAP.md](ROADMAP.md) | Public roadmap and the path to v1.0 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Guide for contributors |
 | [UPGRADING.md](docs/UPGRADING.md) | Version-to-version upgrade and migration notes |
