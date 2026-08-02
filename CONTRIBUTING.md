@@ -20,7 +20,7 @@ Thank you for your interest in contributing! RepoG is a locally-run CLI tool, so
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Go | 1.22+ | https://go.dev/dl/ |
+| Go | 1.25+ | https://go.dev/dl/ |
 | C Compiler | GCC or Clang | Required for CGO (SQLite) |
 | golangci-lint | Latest | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest` |
 | Git | Any recent | You probably have this |
