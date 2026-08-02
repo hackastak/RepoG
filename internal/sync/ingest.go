@@ -62,7 +62,7 @@ func hashPushedAt(s string) string {
 }
 
 // CalculateMaxCharsFromTokens calculates the maximum characters based on token limit.
-// Uses a conservative ratio of ~3.3 characters per token to stay safely under limits.
+// Uses a conservative ratio of 3 characters per token to stay safely under limits.
 // This accounts for worst-case scenarios with special characters and encoding overhead.
 func CalculateMaxCharsFromTokens(maxTokens int) int {
 	if maxTokens <= 0 {
@@ -70,7 +70,7 @@ func CalculateMaxCharsFromTokens(maxTokens int) int {
 	}
 	// Use 90% of token limit to provide safety margin
 	safeTokens := int(float64(maxTokens) * 0.90)
-	// Conservative ratio: 3.3 chars per token
+	// Conservative ratio: 3 chars per token
 	// (Real-world average is ~4 chars/token, but we want to be safe)
 	return safeTokens * 3
 }
