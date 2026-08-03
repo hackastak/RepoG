@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -124,7 +123,7 @@ func runRecommend(cmd *cobra.Command, args []string) error {
 	s.Suffix = " Getting recommendations..."
 	s.Start()
 
-	result, err := recommend.RecommendRepos(context.Background(), recommend.RecommendOptions{
+	result, err := recommend.RecommendRepos(commandContext(cmd), recommend.RecommendOptions{
 		Query:             query,
 		Limit:             recommendLimit,
 		Filters:           filters,

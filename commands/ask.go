@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -108,7 +107,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	fmt.Print(bold("Answer: "))
 
 	// Stream answer
-	result, err := ask.AskQuestion(context.Background(), ask.AskOptions{
+	result, err := ask.AskQuestion(commandContext(cmd), ask.AskOptions{
 		Question:          question,
 		Repo:              askRepo,
 		Limit:             askLimit,

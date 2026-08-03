@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -101,7 +100,7 @@ func runSummarize(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Stream summary
-	result, err := summarize.SummarizeRepo(context.Background(), summarize.SummarizeOptions{
+	result, err := summarize.SummarizeRepo(commandContext(cmd), summarize.SummarizeOptions{
 		Repo:        repo,
 		DB:          database,
 		LLMProvider: llmProvider,

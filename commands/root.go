@@ -2,6 +2,11 @@
 package commands
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/spf13/cobra"
 
 	"github.com/hackastak/repog/internal/tui"
@@ -24,6 +29,18 @@ and supports natural language search, Q&A, recommendations, and summarization.`,
 	RunE: runRoot,
 }
 
+// commandContext returns cmd's context, falling back to context.Background when
+// none was set. cobra only populates the context when a command runs via
+// ExecuteContext (the real CLI path, wired in Execute). A unit test that invokes
+// a RunE directly gets a nil context, which would panic the first database/sql
+// or HTTP call — this keeps those call sites safe either way.
+func commandContext(cmd *cobra.Command) context.Context {
+	if ctx := cmd.Context(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
 func runRoot(cmd *cobra.Command, args []string) error {
 	if !tui.IsInteractive() {
 		return cmd.Help()
@@ -32,8 +49,16 @@ func runRoot(cmd *cobra.Command, args []string) error {
 }
 
 // Execute runs the root command.
+//
+// It installs a context that is cancelled on the first SIGINT/SIGTERM, so a
+// Ctrl-C during a long sync or embed stops in-flight HTTP requests and lets the
+// pipelines unwind cleanly instead of killing the process mid-write. A second
+// signal restores the default behaviour (immediate termination). Subcommands
+// reach this context through cmd.Context().
 func Execute() error {
-	return rootCmd.Execute()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return rootCmd.ExecuteContext(ctx)
 }
 
 func init() {

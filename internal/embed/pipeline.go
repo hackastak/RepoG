@@ -187,6 +187,15 @@ func RunEmbedPipeline(ctx context.Context, opts EmbedOptions) <-chan EmbedEvent 
 		}
 
 		for batchIndex := 0; batchIndex < batchTotal; batchIndex++ {
+			// Stop promptly if the caller cancelled (e.g. Ctrl-C). Embeddings
+			// already persisted stay in the DB; embedded_hash is only advanced
+			// once every chunk in a repo succeeds, so a cancelled run never marks
+			// a repo fully embedded.
+			if err := ctx.Err(); err != nil {
+				eventCh <- EmbedEvent{Type: "error", RepoFullName: "embedding canceled: " + err.Error()}
+				return
+			}
+
 			start := batchIndex * opts.BatchSize
 			end := start + opts.BatchSize
 			if end > len(chunks) {

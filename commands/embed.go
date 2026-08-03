@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -77,7 +76,7 @@ func runEmbed(cmd *cobra.Command, args []string) error {
 		s.Start()
 	}
 
-	eventCh := embed.RunEmbedPipeline(context.Background(), embed.EmbedOptions{
+	eventCh := embed.RunEmbedPipeline(commandContext(cmd), embed.EmbedOptions{
 		IncludeFileTree:   embedIncludeFileTree,
 		BatchSize:         embedBatchSize,
 		DB:                database,
@@ -112,6 +111,11 @@ func runEmbed(cmd *cobra.Command, args []string) error {
 			}
 
 		case "error":
+			// Stop the spinner so a cancellation or failure doesn't leave it
+			// spinning forever; the message stays gated on verbose as before.
+			if s != nil {
+				s.Stop()
+			}
 			if embedVerbose {
 				fmt.Println(red("✗"), "error:", event.RepoFullName)
 			}
