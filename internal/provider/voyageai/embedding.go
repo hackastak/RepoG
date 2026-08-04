@@ -177,7 +177,7 @@ func (v *VoyageAIEmbeddingProvider) EmbedChunks(ctx context.Context, chunks []pr
 	req.Header.Set("Authorization", "Bearer "+v.apiKey)
 
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := provider.DoWithRetry(ctx, client, req)
 	if err != nil {
 		result.Errors = len(chunks)
 		for _, chunk := range chunks {
@@ -286,7 +286,7 @@ func (v *VoyageAIEmbeddingProvider) EmbedQuery(ctx context.Context, query string
 	req.Header.Set("Authorization", "Bearer "+v.apiKey)
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := provider.DoWithRetry(ctx, client, req)
 	if err != nil {
 		return nil
 	}

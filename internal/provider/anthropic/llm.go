@@ -139,7 +139,7 @@ func (a *AnthropicLLMProvider) Call(ctx context.Context, req provider.LLMRequest
 		httpReq.Header.Set("x-api-key", a.apiKey)
 		httpReq.Header.Set("anthropic-version", anthropicVersion)
 
-		resp, err := client.Do(httpReq)
+		resp, err := provider.DoWithRetry(ctx, client, httpReq)
 		if err != nil {
 			return nil, &provider.LLMError{
 				Message:    err.Error(),
@@ -271,7 +271,7 @@ func (a *AnthropicLLMProvider) Stream(ctx context.Context, req provider.LLMReque
 		httpReq.Header.Set("x-api-key", a.apiKey)
 		httpReq.Header.Set("anthropic-version", anthropicVersion)
 
-		resp, err := client.Do(httpReq)
+		resp, err := provider.DoWithRetry(ctx, client, httpReq)
 		if err != nil {
 			return nil, &provider.LLMError{
 				Message:    err.Error(),

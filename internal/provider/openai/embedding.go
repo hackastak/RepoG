@@ -171,7 +171,7 @@ func (o *OpenAIEmbeddingProvider) EmbedChunks(ctx context.Context, chunks []prov
 	req.Header.Set("Authorization", "Bearer "+o.apiKey)
 
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := provider.DoWithRetry(ctx, client, req)
 	if err != nil {
 		result.Errors = len(chunks)
 		for _, chunk := range chunks {
@@ -280,7 +280,7 @@ func (o *OpenAIEmbeddingProvider) EmbedQuery(ctx context.Context, query string) 
 	req.Header.Set("Authorization", "Bearer "+o.apiKey)
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := provider.DoWithRetry(ctx, client, req)
 	if err != nil {
 		return nil
 	}

@@ -125,7 +125,7 @@ func (o *OllamaLLMProvider) Call(ctx context.Context, req provider.LLMRequest) (
 
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		resp, err := client.Do(httpReq)
+		resp, err := provider.DoWithRetry(ctx, client, httpReq)
 		if err != nil {
 			return nil, &provider.LLMError{
 				Message:    err.Error(),
@@ -249,7 +249,7 @@ func (o *OllamaLLMProvider) Stream(ctx context.Context, req provider.LLMRequest,
 
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		resp, err := client.Do(httpReq)
+		resp, err := provider.DoWithRetry(ctx, client, httpReq)
 		if err != nil {
 			return nil, &provider.LLMError{
 				Message:    err.Error(),
