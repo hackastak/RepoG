@@ -33,6 +33,12 @@ type askView struct {
 	stream chan tea.Msg // active stream channel; nil when idle
 	gen    int          // generation counter; stale stream msgs are discarded
 
+	// streamCtx/cancel drive the in-flight stream. cancel tears down the
+	// producer goroutine and aborts its HTTP request when a new question
+	// supersedes this one or the app quits (see cancelStream); nil when idle.
+	streamCtx context.Context
+	cancel    context.CancelFunc
+
 	streaming    bool
 	answered     bool // a question has completed at least once this session
 	noEmbeddings bool // the corpus has no embeddings yet
@@ -72,6 +78,21 @@ func (v *askView) Init() tea.Cmd {
 // root model must not steal plain keys (digits, "q", tab) for global actions.
 func (v *askView) capturingText() bool { return v.input.Focused() }
 
+// releaseStream cancels the in-flight stream (if any) and clears its context, so
+// the producer goroutine unwinds and its HTTP request is aborted. Calling it when
+// the stream has already finished is a harmless no-op reset.
+func (v *askView) releaseStream() {
+	if v.cancel != nil {
+		v.cancel()
+		v.cancel = nil
+	}
+	v.streamCtx = nil
+}
+
+// cancelStream implements streamCanceler; the root model calls it on quit so a
+// streaming answer doesn't strand its goroutine when the program exits.
+func (v *askView) cancelStream() { v.releaseStream() }
+
 func (v *askView) Update(msg tea.Msg) (view, tea.Cmd) {
 	switch msg := msg.(type) {
 	case askChunkMsg:
@@ -79,7 +100,7 @@ func (v *askView) Update(msg tea.Msg) (view, tea.Cmd) {
 			return v, nil // a stale chunk from a superseded question
 		}
 		v.answer += msg.chunk
-		return v, waitForAskMsg(v.stream)
+		return v, waitForStreamMsg(v.streamCtx, v.stream)
 
 	case askDoneMsg:
 		if msg.gen != v.gen {
@@ -88,6 +109,7 @@ func (v *askView) Update(msg tea.Msg) (view, tea.Cmd) {
 		v.streaming = false
 		v.answered = true
 		v.stream = nil
+		v.releaseStream()
 		v.err = msg.err
 		v.noEmbeddings = msg.noEmbeddings
 		if msg.err == nil && !msg.noEmbeddings {
@@ -113,6 +135,9 @@ func (v *askView) Update(msg tea.Msg) (view, tea.Cmd) {
 			if v.streaming || q == "" {
 				return v, nil
 			}
+			// Tear down any previous stream before starting a new one so a slow
+			// earlier answer can't outlive the question that replaced it.
+			v.releaseStream()
 			v.gen++
 			v.streaming = true
 			v.answered = false
@@ -125,10 +150,13 @@ func (v *askView) Update(msg tea.Msg) (view, tea.Cmd) {
 			v.viewport.GotoTop()
 			ch := make(chan tea.Msg, 64)
 			v.stream = ch
+			ctx, cancel := context.WithCancel(context.Background())
+			v.streamCtx = ctx
+			v.cancel = cancel
 			// runAskCmd reads the first message itself; the read chain then
-			// continues from Update on each askChunkMsg. Issuing waitForAskMsg
+			// continues from Update on each askChunkMsg. Issuing waitForStreamMsg
 			// here too would add a second concurrent reader on ch — don't.
-			return v, tea.Batch(v.spinner.Tick, runAskCmd(v.app, q, v.gen, ch))
+			return v, tea.Batch(v.spinner.Tick, runAskCmd(v.app, q, v.gen, ctx, ch))
 		case "esc":
 			// Blur the question box so global tab/quit keys work again, letting
 			// the user scroll the answer or leave the tab.
@@ -249,24 +277,14 @@ type askDoneMsg struct {
 func (askChunkMsg) targetTab() tab { return tabAsk }
 func (askDoneMsg) targetTab() tab  { return tabAsk }
 
-// waitForAskMsg blocks on the stream channel and returns the next message. Each
-// askChunkMsg re-issues this command, draining the channel one message at a time
-// in order; the goroutine in runAskCmd sends a final askDoneMsg and stops.
-func waitForAskMsg(ch chan tea.Msg) tea.Cmd {
-	if ch == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		return <-ch
-	}
-}
-
 // runAskCmd validates preconditions on the UI goroutine, then launches the RAG
 // query in a background goroutine that streams chunks onto ch and finishes with
 // an askDoneMsg. It reuses the shared providers and the same ask.AskQuestion the
 // CLI calls; the only TUI-specific logic is the empty-corpus guard, surfaced as
-// an empty-state rather than a hard error.
-func runAskCmd(app *appContext, question string, gen int, ch chan tea.Msg) tea.Cmd {
+// an empty-state rather than a hard error. ctx cancels the stream (see
+// streamMessages), so quitting mid-answer tears the goroutine and its HTTP
+// request down instead of leaking them.
+func runAskCmd(app *appContext, question string, gen int, ctx context.Context, ch chan tea.Msg) tea.Cmd {
 	return func() tea.Msg {
 		database := app.db()
 		if database == nil {
@@ -292,23 +310,19 @@ func runAskCmd(app *appContext, question string, gen int, ch chan tea.Msg) tea.C
 			return askDoneMsg{gen: gen, err: err}
 		}
 
-		// Stream off this goroutine: each token is pushed to ch, then a final
-		// askDoneMsg. waitForAskMsg (re-issued per chunk) drains them in order.
-		go func() {
-			result, askErr := ask.AskQuestion(context.Background(), ask.AskOptions{
+		// Stream off a background goroutine: each token is pushed to ch, then a
+		// final askDoneMsg. waitForStreamMsg (re-issued per chunk) drains them.
+		return streamMessages(ctx, ch, func(send func(tea.Msg)) {
+			result, askErr := ask.AskQuestion(ctx, ask.AskOptions{
 				Question:          question,
 				Limit:             askChunkLimit,
 				DB:                database,
 				EmbeddingProvider: embedProvider,
 				LLMProvider:       llmProvider,
 			}, func(chunk string) {
-				ch <- askChunkMsg{gen: gen, chunk: chunk}
+				send(askChunkMsg{gen: gen, chunk: chunk})
 			})
-			ch <- askDoneMsg{gen: gen, result: result, err: askErr}
-		}()
-
-		// The command itself reads the first message so Bubbletea has something
-		// to deliver immediately; subsequent reads come from waitForAskMsg.
-		return <-ch
+			send(askDoneMsg{gen: gen, result: result, err: askErr})
+		})
 	}
 }

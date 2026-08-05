@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -94,6 +95,7 @@ func TestReposSummaryStreams(t *testing.T) {
 	v.mode = reposModeSummary
 	v.busy = true
 	v.sumStream = make(chan tea.Msg, 4)
+	v.sumCtx = context.Background()
 
 	updated, cmd := v.Update(summarizeChunkMsg{gen: v.opGen, chunk: "## Overview\n"})
 	rv := updated.(*reposView)

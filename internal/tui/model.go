@@ -172,6 +172,9 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Setup/reconfig finished: adopt the new app context, rebuild every view
 		// so they use the configured providers/database, and drop the user on the
 		// Repos tab. The previous app's database (if any) is closed by Run.
+		// Cancel any in-flight stream first so its goroutine doesn't outlive the
+		// views being replaced.
+		m.cancelStreams()
 		m.app = msg.app
 		m.needsSetup = false
 		m.views = buildViews(msg.app)
@@ -190,12 +193,14 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// is delegated to the active view so it owns its own input.
 		if msg.String() == "ctrl+c" {
 			m.quitting = true
+			m.cancelStreams()
 			return m, tea.Quit
 		}
 		if !m.activeCapturesText() {
 			switch msg.String() {
 			case "q":
 				m.quitting = true
+				m.cancelStreams()
 				return m, tea.Quit
 			case "tab":
 				m.active = nextTab(m.active)
@@ -222,6 +227,17 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updated, cmd := m.views[m.active].Update(msg)
 	m.views[m.active] = updated
 	return m, cmd
+}
+
+// cancelStreams cancels every view that has an in-flight streaming goroutine, so
+// quitting the app (or rebuilding the views after reconfig) tears those
+// goroutines and their HTTP requests down instead of leaking them.
+func (m rootModel) cancelStreams() {
+	for _, vw := range m.views {
+		if c, ok := vw.(streamCanceler); ok {
+			c.cancelStream()
+		}
+	}
 }
 
 func (m rootModel) View() string {

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -45,6 +46,12 @@ type reposView struct {
 	summary   string // accumulated streamed summary
 	sumStream chan tea.Msg
 	sumResult summarize.SummarizeResult
+
+	// sumCtx/sumCancel drive the in-flight summary stream. sumCancel tears down
+	// the producer goroutine and aborts its HTTP request when a new action
+	// supersedes it or the app quits (see cancelStream); nil when idle.
+	sumCtx    context.Context
+	sumCancel context.CancelFunc
 
 	// recommend resolves in a single call, like Search.
 	recResult    recommend.RecommendResult

@@ -36,6 +36,21 @@ func (v *reposView) focusedRow() (repoRow, bool) {
 	return v.rows[i], true
 }
 
+// releaseStream cancels the in-flight summary stream (if any) and clears its
+// context, unwinding the producer goroutine and aborting its HTTP request.
+// Calling it when nothing is streaming is a harmless no-op reset.
+func (v *reposView) releaseStream() {
+	if v.sumCancel != nil {
+		v.sumCancel()
+		v.sumCancel = nil
+	}
+	v.sumCtx = nil
+}
+
+// cancelStream implements streamCanceler; the root model calls it on quit so a
+// streaming summary doesn't strand its goroutine when the program exits.
+func (v *reposView) cancelStream() { v.releaseStream() }
+
 // startSummarize kicks off a streaming AI summary of the focused repo. Like the
 // Ask view, the summary streams token-by-token over a channel; opGen guards a
 // superseded action's stale messages.
@@ -44,6 +59,8 @@ func (v *reposView) startSummarize() (view, tea.Cmd) {
 	if !ok {
 		return v, nil
 	}
+	// Tear down any previous action's stream before starting a new one.
+	v.releaseStream()
 	v.opGen++
 	v.mode = reposModeSummary
 	v.target = repo.FullName
@@ -57,10 +74,13 @@ func (v *reposView) startSummarize() (view, tea.Cmd) {
 
 	ch := make(chan tea.Msg, 256)
 	v.sumStream = ch
+	ctx, cancel := context.WithCancel(context.Background())
+	v.sumCtx = ctx
+	v.sumCancel = cancel
 	// runSummarizeCmd reads the first message itself; the read chain then
 	// continues from updateAction on each summarizeChunkMsg (issuing
-	// waitForSummarizeMsg here too would add a second concurrent reader).
-	return v, tea.Batch(v.spinner.Tick, runSummarizeCmd(v.app, repo.FullName, v.opGen, ch))
+	// waitForStreamMsg here too would add a second concurrent reader).
+	return v, tea.Batch(v.spinner.Tick, runSummarizeCmd(v.app, repo.FullName, v.opGen, ctx, ch))
 }
 
 // startRecommend kicks off a (non-streaming) recommendation of repos related to
@@ -70,6 +90,8 @@ func (v *reposView) startRecommend() (view, tea.Cmd) {
 	if !ok {
 		return v, nil
 	}
+	// A recommend supersedes any in-flight summary stream; tear it down.
+	v.releaseStream()
 	v.opGen++
 	v.mode = reposModeRecommend
 	v.target = repo.FullName
@@ -93,7 +115,7 @@ func (v *reposView) updateAction(msg tea.Msg) (view, tea.Cmd) {
 			return v, nil
 		}
 		v.summary += msg.chunk
-		return v, waitForSummarizeMsg(v.sumStream)
+		return v, waitForStreamMsg(v.sumCtx, v.sumStream)
 
 	case summarizeDoneMsg:
 		if msg.gen != v.opGen {
@@ -101,6 +123,7 @@ func (v *reposView) updateAction(msg tea.Msg) (view, tea.Cmd) {
 		}
 		v.busy = false
 		v.sumStream = nil
+		v.releaseStream()
 		v.opErr = msg.err
 		if msg.err == nil {
 			v.sumResult = msg.result
@@ -260,23 +283,13 @@ func (summarizeChunkMsg) targetTab() tab { return tabRepos }
 func (summarizeDoneMsg) targetTab() tab  { return tabRepos }
 func (recommendDoneMsg) targetTab() tab  { return tabRepos }
 
-// waitForSummarizeMsg blocks on the stream channel and returns the next message.
-// Each summarizeChunkMsg re-issues this command, draining the channel one
-// message at a time; the goroutine sends a final summarizeDoneMsg and stops.
-func waitForSummarizeMsg(ch chan tea.Msg) tea.Cmd {
-	if ch == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		return <-ch
-	}
-}
-
 // runSummarizeCmd validates preconditions on the UI goroutine, then streams the
 // summary off a background goroutine onto ch, finishing with a summarizeDoneMsg.
 // It reuses the shared LLM provider and the same summarize.SummarizeRepo the CLI
 // calls; the empty-data case is handled inside SummarizeRepo (it streams a hint).
-func runSummarizeCmd(app *appContext, repo string, gen int, ch chan tea.Msg) tea.Cmd {
+// ctx cancels the stream (see streamMessages), so quitting mid-summary tears the
+// goroutine and its HTTP request down instead of leaking them.
+func runSummarizeCmd(app *appContext, repo string, gen int, ctx context.Context, ch chan tea.Msg) tea.Cmd {
 	return func() tea.Msg {
 		database := app.db()
 		if database == nil {
@@ -287,20 +300,16 @@ func runSummarizeCmd(app *appContext, repo string, gen int, ch chan tea.Msg) tea
 			return summarizeDoneMsg{gen: gen, err: err}
 		}
 
-		go func() {
-			result, sumErr := summarize.SummarizeRepo(context.Background(), summarize.SummarizeOptions{
+		return streamMessages(ctx, ch, func(send func(tea.Msg)) {
+			result, sumErr := summarize.SummarizeRepo(ctx, summarize.SummarizeOptions{
 				Repo:        repo,
 				DB:          database,
 				LLMProvider: llmProvider,
 			}, func(chunk string) {
-				ch <- summarizeChunkMsg{gen: gen, chunk: chunk}
+				send(summarizeChunkMsg{gen: gen, chunk: chunk})
 			})
-			ch <- summarizeDoneMsg{gen: gen, result: result, err: sumErr}
-		}()
-
-		// The command itself reads the first message so Bubbletea has something
-		// to deliver immediately; subsequent reads come from waitForSummarizeMsg.
-		return <-ch
+			send(summarizeDoneMsg{gen: gen, result: result, err: sumErr})
+		})
 	}
 }
 
