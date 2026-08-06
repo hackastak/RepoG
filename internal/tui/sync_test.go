@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -187,6 +188,88 @@ func TestSyncViewPreconditionError(t *testing.T) {
 	}
 	if out := v.View(80, 24); !strings.Contains(out, "kaboom") {
 		t.Fatalf("expected the error in output, got:\n%s", out)
+	}
+}
+
+// TestSyncViewCancelStreamCancelsContext confirms the view's cancelStream cancels
+// the in-flight run's context and clears its fields, so quitting mid-sync tears
+// the producer goroutine (and its HTTP requests / open transaction) down.
+func TestSyncViewCancelStreamCancelsContext(t *testing.T) {
+	v := newSyncView(&appContext{})
+	ctx, cancel := context.WithCancel(context.Background())
+	v.streamCtx = ctx
+	v.cancel = cancel
+
+	v.cancelStream()
+
+	if ctx.Err() == nil {
+		t.Fatal("expected the run context to be cancelled")
+	}
+	if v.cancel != nil || v.streamCtx != nil {
+		t.Fatal("expected cancel and streamCtx to be cleared")
+	}
+}
+
+// TestWaitForSyncEventCancel proves the reader unblocks on cancel instead of
+// parking forever on a channel the cancelled producer has stopped feeding. Drop
+// the ctx.Done() case from waitForSyncEvent and this hangs, then goleak fails.
+func TestWaitForSyncEventCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan sync.IngestEvent) // unbuffered, never fed
+
+	cmd := waitForSyncEvent(ctx, ch, 1)
+	if cmd == nil {
+		t.Fatal("expected a wait command")
+	}
+
+	got := make(chan tea.Msg, 1)
+	go func() { got <- cmd() }()
+
+	cancel()
+	if msg := <-got; msg != nil {
+		t.Fatalf("expected nil message on cancel, got %#v", msg)
+	}
+}
+
+// TestWaitForEmbedEventCancel is the embed-channel counterpart of the above.
+func TestWaitForEmbedEventCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan embed.EmbedEvent) // unbuffered, never fed
+
+	cmd := waitForEmbedEvent(ctx, ch, 1)
+	if cmd == nil {
+		t.Fatal("expected a wait command")
+	}
+
+	got := make(chan tea.Msg, 1)
+	go func() { got <- cmd() }()
+
+	cancel()
+	if msg := <-got; msg != nil {
+		t.Fatalf("expected nil message on cancel, got %#v", msg)
+	}
+}
+
+// TestRootModelQuitCancelsSyncStream confirms quitting (q) cancels an in-flight
+// sync/embed run through the root model's cancelStreams sweep, so its producer
+// goroutine doesn't outlive the program.
+func TestRootModelQuitCancelsSyncStream(t *testing.T) {
+	sv := newSyncView(&appContext{})
+	ctx, cancel := context.WithCancel(context.Background())
+	sv.streamCtx = ctx
+	sv.cancel = cancel
+
+	m := rootModel{
+		app:    &appContext{},
+		views:  map[tab]view{tabSync: sv},
+		active: tabSync,
+	}
+
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}); cmd == nil {
+		t.Fatal("expected q to return a quit command")
+	}
+	if ctx.Err() == nil {
+		t.Fatal("expected quit to cancel the in-flight sync stream")
 	}
 }
 

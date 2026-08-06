@@ -476,6 +476,64 @@ func TestIngestRepos_SyncStateFailedOnError(t *testing.T) {
 	}
 }
 
+// TestIngestRepos_StopsOnCancel proves the processing loop honors context
+// cancellation. Two repos are returned; the readme handler cancels the context
+// while the loop is mid-flight. With the ctx.Err() guard the loop breaks and the
+// goroutine returns (closing the channel) without emitting the terminal "done"
+// event — the old behavior marched through every remaining repo and still sent
+// "done". goleak (TestMain) additionally fails if the producer strands itself.
+func TestIngestRepos_StopsOnCancel(t *testing.T) {
+	repos := []github.Repo{
+		makeTestRepo(1, "user/repo1", "user", "repo1"),
+		makeTestRepo(2, "user/repo2", "user", "repo2"),
+	}
+	shortReadme := base64.StdEncoding.EncodeToString([]byte("# hi"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/user/repos", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(repos)
+	})
+	// Either repo's readme fetch cancels the run; whichever the map-ordered loop
+	// reaches first, the next iteration observes ctx.Err() and breaks.
+	readme := func(w http.ResponseWriter, r *http.Request) {
+		cancel()
+		_ = json.NewEncoder(w).Encode(map[string]string{"content": shortReadme, "encoding": "base64"})
+	}
+	mux.HandleFunc("/repos/user/repo1/readme", readme)
+	mux.HandleFunc("/repos/user/repo2/readme", readme)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	github.SetDefaultBaseURL(server.URL)
+	defer github.ResetDefaultBaseURL()
+
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	database, err := db.Open(dbPath, 768)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer func() { _ = db.Close(database) }()
+
+	eventCh := IngestRepos(ctx, IngestOptions{
+		IncludeOwned: true,
+		DB:           database,
+		GitHubPAT:    "test-token",
+	})
+
+	sawDone := false
+	for event := range eventCh { // ranges to close; hangs (→ goleak) if it never does
+		if event.Type == "done" {
+			sawDone = true
+		}
+	}
+	if sawDone {
+		t.Fatal("expected the cancelled run to break before emitting a done event")
+	}
+}
+
 func TestIngestRepos_WithMockServer(t *testing.T) {
 	// Create mock GitHub API server
 	repos := []github.Repo{makeTestRepo(1, "user/repo1", "user", "repo1")}

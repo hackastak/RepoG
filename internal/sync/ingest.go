@@ -150,6 +150,13 @@ func IngestRepos(ctx context.Context, opts IngestOptions) <-chan IngestEvent {
 		var totalProcessed, skippedCount, errorCount int
 
 		for fullName, entry := range reposToProcess {
+			// Stop promptly if the caller cancelled (e.g. the TUI quitting
+			// mid-sync). Without this the loop keeps issuing per-repo failures on a
+			// dead context, and once the buffered event channel fills with the
+			// consumer gone, the sends below would block this goroutine forever.
+			if ctx.Err() != nil {
+				return
+			}
 			repo := entry.Repo
 
 			// Compute hash

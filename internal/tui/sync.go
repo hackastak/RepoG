@@ -50,6 +50,12 @@ type syncView struct {
 	lines       []string // accumulated progress log
 	lastContent string   // cache so we only SetContent on change
 	err         error    // last fatal precondition error (not configured, provider, etc.)
+
+	// streamCtx/cancel drive the in-flight run. cancel tears down the sync/embed
+	// producer goroutine — aborting its HTTP requests and open SQLite write — when
+	// the app quits mid-run; nil when idle. See cancelStream.
+	streamCtx context.Context
+	cancel    context.CancelFunc
 }
 
 // syncPhase tracks which pipeline, if any, is currently running.
@@ -76,6 +82,22 @@ func newSyncView(app *appContext) *syncView {
 // triggers an operation, so re-entering the tab must not disturb a run.
 func (v *syncView) Init() tea.Cmd { return nil }
 
+// releaseStream cancels the in-flight sync/embed run (if any) and clears its
+// context, so the producer goroutine unwinds and its HTTP requests and open
+// transaction are torn down. A harmless no-op reset once the run has finished.
+func (v *syncView) releaseStream() {
+	if v.cancel != nil {
+		v.cancel()
+		v.cancel = nil
+	}
+	v.streamCtx = nil
+}
+
+// cancelStream implements streamCanceler; the root model calls it on quit (and
+// when the views are rebuilt) so a running sync or embed doesn't strand its
+// producer goroutine, HTTP requests, and SQLite write when the program exits.
+func (v *syncView) cancelStream() { v.releaseStream() }
+
 func (v *syncView) Update(msg tea.Msg) (view, tea.Cmd) {
 	switch msg := msg.(type) {
 	case syncStartedMsg:
@@ -83,14 +105,14 @@ func (v *syncView) Update(msg tea.Msg) (view, tea.Cmd) {
 			return v, nil
 		}
 		v.syncCh = msg.ch
-		return v, waitForSyncEvent(v.syncCh, v.gen)
+		return v, waitForSyncEvent(v.streamCtx, v.syncCh, v.gen)
 
 	case embedStartedMsg:
 		if msg.gen != v.gen {
 			return v, nil
 		}
 		v.embedCh = msg.ch
-		return v, waitForEmbedEvent(v.embedCh, v.gen)
+		return v, waitForEmbedEvent(v.streamCtx, v.embedCh, v.gen)
 
 	case syncEventMsg:
 		if msg.gen != v.gen {
@@ -108,6 +130,7 @@ func (v *syncView) Update(msg tea.Msg) (view, tea.Cmd) {
 		if msg.gen != v.gen {
 			return v, nil
 		}
+		v.releaseStream()
 		v.running = false
 		v.phase = phaseIdle
 		v.chain = false
@@ -219,18 +242,24 @@ func (v *syncView) appendLine(s string) {
 // beginSync starts the ingest pipeline. chain carries the "embed afterwards"
 // intent (the "a" flow) so finishSync knows whether to continue into embed.
 func (v *syncView) beginSync(chain bool) tea.Cmd {
+	// Release any prior run's context (a no-op from a keypress, since triggers are
+	// inert while running; live only on the chain hand-off from a finished sync).
+	v.releaseStream()
 	v.gen++
 	v.phase = phaseSyncing
 	v.running = true
 	v.chain = chain
 	v.err = nil
 	v.syncSynced, v.syncSkipped, v.syncErrors = 0, 0, 0
+	ctx, cancel := context.WithCancel(context.Background())
+	v.streamCtx = ctx
+	v.cancel = cancel
 	if chain {
 		v.appendLine(titleStyle.Render("▶ Sync + embed started"))
 	} else {
 		v.appendLine(titleStyle.Render("▶ Sync started"))
 	}
-	return tea.Batch(v.spinner.Tick, runSyncCmd(v.app, v.gen))
+	return tea.Batch(v.spinner.Tick, runSyncCmd(v.app, v.gen, ctx))
 }
 
 // beginEmbed starts the embedding pipeline. issueTick is true when embed is
@@ -238,6 +267,9 @@ func (v *syncView) beginSync(chain bool) tea.Cmd {
 // when chained after a sync the existing ticker is still running, so a second
 // Tick would double it.
 func (v *syncView) beginEmbed(issueTick bool) tea.Cmd {
+	// On the chain hand-off this cancels the just-finished sync's context (a
+	// no-op — its producer has already closed) before opening a fresh one.
+	v.releaseStream()
 	v.gen++
 	v.phase = phaseEmbedding
 	v.running = true
@@ -245,11 +277,14 @@ func (v *syncView) beginEmbed(issueTick bool) tea.Cmd {
 	v.err = nil
 	v.embedded, v.embSkipped, v.embErrored, v.embTotal = 0, 0, 0, 0
 	v.embBatch, v.embBatchTotal = 0, 0
+	ctx, cancel := context.WithCancel(context.Background())
+	v.streamCtx = ctx
+	v.cancel = cancel
 	v.appendLine(titleStyle.Render("▶ Embed started"))
 	if issueTick {
-		return tea.Batch(v.spinner.Tick, runEmbedCmd(v.app, v.gen))
+		return tea.Batch(v.spinner.Tick, runEmbedCmd(v.app, v.gen, ctx))
 	}
-	return runEmbedCmd(v.app, v.gen)
+	return runEmbedCmd(v.app, v.gen, ctx)
 }
 
 func (v *syncView) handleSyncEvent(msg syncEventMsg) (view, tea.Cmd) {
@@ -279,15 +314,17 @@ func (v *syncView) handleSyncEvent(msg syncEventMsg) (view, tea.Cmd) {
 		v.appendLine(bannerSync(ev))
 		return v.finishSync()
 	}
-	return v, waitForSyncEvent(v.syncCh, v.gen)
+	return v, waitForSyncEvent(v.streamCtx, v.syncCh, v.gen)
 }
 
 func (v *syncView) finishSync() (view, tea.Cmd) {
 	v.syncCh = nil
 	if v.chain {
-		// Continue into embed on the same spinner ticker.
+		// Continue into embed on the same spinner ticker; beginEmbed swaps in a
+		// fresh context for the embed phase.
 		return v, v.beginEmbed(false)
 	}
+	v.releaseStream()
 	v.running = false
 	v.phase = phaseIdle
 	v.hasRun = true
@@ -322,11 +359,12 @@ func (v *syncView) handleEmbedEvent(msg embedEventMsg) (view, tea.Cmd) {
 		v.appendLine(bannerEmbed(ev))
 		return v.finishEmbed()
 	}
-	return v, waitForEmbedEvent(v.embedCh, v.gen)
+	return v, waitForEmbedEvent(v.streamCtx, v.embedCh, v.gen)
 }
 
 func (v *syncView) finishEmbed() (view, tea.Cmd) {
 	v.embedCh = nil
+	v.releaseStream()
 	v.running = false
 	v.phase = phaseIdle
 	v.chain = false
@@ -379,24 +417,41 @@ func (opErrMsg) targetTab() tab        { return tabSync }
 
 // waitForSyncEvent blocks on the ingest channel and returns the next event.
 // Each event re-issues this command from Update, draining the channel in order;
-// a closed channel yields a final closed=true message.
-func waitForSyncEvent(ch <-chan sync.IngestEvent, gen int) tea.Cmd {
+// a closed channel yields a final closed=true message. The read races ctx.Done()
+// so quitting mid-run unblocks this reader goroutine (returning a nil, no-op
+// message) instead of parking on a channel the cancelled producer has stopped
+// feeding.
+func waitForSyncEvent(ctx context.Context, ch <-chan sync.IngestEvent, gen int) tea.Cmd {
+	if ctx == nil || ch == nil {
+		return nil
+	}
 	return func() tea.Msg {
-		ev, ok := <-ch
-		if !ok {
-			return syncEventMsg{gen: gen, closed: true}
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				return syncEventMsg{gen: gen, closed: true}
+			}
+			return syncEventMsg{gen: gen, ev: ev}
+		case <-ctx.Done():
+			return nil
 		}
-		return syncEventMsg{gen: gen, ev: ev}
 	}
 }
 
-func waitForEmbedEvent(ch <-chan embed.EmbedEvent, gen int) tea.Cmd {
+func waitForEmbedEvent(ctx context.Context, ch <-chan embed.EmbedEvent, gen int) tea.Cmd {
+	if ctx == nil || ch == nil {
+		return nil
+	}
 	return func() tea.Msg {
-		ev, ok := <-ch
-		if !ok {
-			return embedEventMsg{gen: gen, closed: true}
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				return embedEventMsg{gen: gen, closed: true}
+			}
+			return embedEventMsg{gen: gen, ev: ev}
+		case <-ctx.Done():
+			return nil
 		}
-		return embedEventMsg{gen: gen, ev: ev}
 	}
 }
 
@@ -404,7 +459,7 @@ func waitForEmbedEvent(ch <-chan embed.EmbedEvent, gen int) tea.Cmd {
 // ingest pipeline and hands its channel back. It mirrors commands/sync.go's
 // defaults (owned + starred, chunk size derived from the embedding model) so the
 // TUI and CLI produce identical data.
-func runSyncCmd(app *appContext, gen int) tea.Cmd {
+func runSyncCmd(app *appContext, gen int, ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
 		database := app.db()
 		if database == nil {
@@ -423,7 +478,7 @@ func runSyncCmd(app *appContext, gen int) tea.Cmd {
 		}
 		maxChunkSize := sync.CalculateMaxCharsFromTokens(embedProvider.MaxTokens())
 
-		ch := sync.IngestRepos(context.Background(), sync.IngestOptions{
+		ch := sync.IngestRepos(ctx, sync.IngestOptions{
 			IncludeOwned:   true,
 			IncludeStarred: true,
 			MaxChunkSize:   maxChunkSize,
@@ -437,7 +492,7 @@ func runSyncCmd(app *appContext, gen int) tea.Cmd {
 // runEmbedCmd validates preconditions, then opens the embedding pipeline and
 // hands its channel back. Defaults mirror commands/embed.go (file-tree chunks
 // included; the provider's batch size).
-func runEmbedCmd(app *appContext, gen int) tea.Cmd {
+func runEmbedCmd(app *appContext, gen int, ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
 		database := app.db()
 		if database == nil {
@@ -447,7 +502,7 @@ func runEmbedCmd(app *appContext, gen int) tea.Cmd {
 		if err != nil {
 			return opErrMsg{gen: gen, err: err}
 		}
-		ch := embed.RunEmbedPipeline(context.Background(), embed.EmbedOptions{
+		ch := embed.RunEmbedPipeline(ctx, embed.EmbedOptions{
 			IncludeFileTree:   true,
 			DB:                database,
 			EmbeddingProvider: embedProvider,
