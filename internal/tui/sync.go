@@ -36,6 +36,15 @@ type syncView struct {
 	chain   bool // when true, automatically embed after a sync completes (the "a" flow)
 	hasRun  bool // at least one operation has finished this session
 
+	// Suspend/resume state (ADR-011). paused means a run was halted with "p" and
+	// can be continued with "r"; pausedPhase/pausedChain remember what to resume,
+	// and resuming (set on "r", consumed by the next begin*) tells begin* to carry
+	// counters forward instead of zeroing them.
+	paused      bool
+	pausedPhase syncPhase
+	pausedChain bool
+	resuming    bool
+
 	// Active typed event channels; nil when no operation of that kind is in
 	// flight. gen invalidates stale events from a superseded run.
 	syncCh  <-chan sync.IngestEvent
@@ -46,6 +55,16 @@ type syncView struct {
 	syncSynced, syncSkipped, syncErrors        int
 	embedded, embSkipped, embErrored, embTotal int
 	embBatch, embBatchTotal                    int
+
+	// Carried progress across a suspend (ADR-011), so resume shows a continuous
+	// count rather than restarting from zero. seenRepos dedupes per-repo events so
+	// a resumed sync's re-emitted skips don't double-count repos already tallied.
+	// For embed the resumed pipeline reports only un-embedded chunks, so a batch
+	// baseline is added to the run's cumulative counts; embCarrying marks a run
+	// that is continuing a suspended embed.
+	seenRepos                                                  map[string]bool
+	embCarrying                                                bool
+	baseEmbedded, baseEmbErrored, baseEmbSkipped, baseEmbTotal int
 
 	lines       []string // accumulated progress log
 	lastContent string   // cache so we only SetContent on change
@@ -96,7 +115,63 @@ func (v *syncView) releaseStream() {
 // cancelStream implements streamCanceler; the root model calls it on quit (and
 // when the views are rebuilt) so a running sync or embed doesn't strand its
 // producer goroutine, HTTP requests, and SQLite write when the program exits.
+// Quit is therefore a hard cancel: nothing about a suspended run is persisted,
+// so the next launch starts fresh (ADR-011).
 func (v *syncView) cancelStream() { v.releaseStream() }
+
+// suspend halts the running op but keeps a resume point (ADR-011). It cancels
+// the context (tearing the producer down exactly as quit does), remembers what
+// to resume, snapshots the embed baseline so resume can continue the count, and
+// bumps gen so any event already in flight from the stopped run is discarded.
+func (v *syncView) suspend() {
+	v.pausedPhase = v.phase
+	v.pausedChain = v.chain
+	if v.phase == phaseEmbedding {
+		// The resumed pipeline re-reports only un-embedded chunks, so carry the
+		// current cumulative totals as the baseline resume adds onto.
+		v.baseEmbedded = v.embedded
+		v.baseEmbErrored = v.embErrored
+		v.baseEmbSkipped = v.embSkipped
+		v.baseEmbTotal = v.embTotal
+	}
+	v.releaseStream()
+	v.syncCh = nil
+	v.embedCh = nil
+	v.gen++
+	v.running = false
+	v.paused = true
+	v.appendLine(warnStyle.Render("⏸ Paused"))
+}
+
+// resume continues a suspended op. It sets resuming so the next begin* carries
+// counters forward rather than zeroing them, then re-issues the pipeline the run
+// was in (a chained sync carries its embed-afterwards intent).
+func (v *syncView) resume() tea.Cmd {
+	v.resuming = true
+	v.paused = false
+	v.appendLine(titleStyle.Render("▶ Resumed"))
+	if v.pausedPhase == phaseEmbedding {
+		return v.beginEmbed(true)
+	}
+	return v.beginSync(v.pausedChain)
+}
+
+// cancelOp stops a running op (or drops a suspended one) and returns to idle,
+// abandoning any resume point. Work already committed to the DB stays — cancel
+// never rolls back embeddings or synced repos already written (ADR-011).
+func (v *syncView) cancelOp() {
+	v.releaseStream()
+	v.syncCh = nil
+	v.embedCh = nil
+	v.gen++
+	v.running = false
+	v.paused = false
+	v.resuming = false
+	v.embCarrying = false
+	v.phase = phaseIdle
+	v.chain = false
+	v.appendLine(errStyle.Render("✗ Cancelled"))
+}
 
 func (v *syncView) Update(msg tea.Msg) (view, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -147,18 +222,39 @@ func (v *syncView) Update(msg tea.Msg) (view, tea.Cmd) {
 		return v, cmd
 
 	case tea.KeyMsg:
-		// While an operation runs, the trigger keys are inert; other keys still
-		// scroll the log so the user can review progress.
-		if !v.running {
-			switch msg.String() {
-			case "s":
+		switch msg.String() {
+		case "p":
+			// Suspend a running op; keep a resume point (ADR-011).
+			if v.running {
+				v.suspend()
+				return v, nil
+			}
+		case "r":
+			// Resume a suspended op, carrying its counters forward.
+			if v.paused {
+				return v, v.resume()
+			}
+		case "c":
+			// Cancel — stop and abandon the run (or drop a suspended one).
+			if v.running || v.paused {
+				v.cancelOp()
+				return v, nil
+			}
+		case "s":
+			if !v.running && !v.paused {
 				return v, v.beginSync(false)
-			case "e":
+			}
+		case "e":
+			if !v.running && !v.paused {
 				return v, v.beginEmbed(true)
-			case "a":
+			}
+		case "a":
+			if !v.running && !v.paused {
 				return v, v.beginSync(true)
 			}
 		}
+		// Any other key (and inert triggers) scrolls the log so the user can
+		// review progress mid-run or while paused.
 		var cmd tea.Cmd
 		v.viewport, cmd = v.viewport.Update(msg)
 		return v, cmd
@@ -193,10 +289,14 @@ func (v *syncView) View(width, height int) string {
 }
 
 func (v *syncView) HelpKeys() string {
-	if v.running {
-		return "running… ↑/↓ scroll"
+	switch {
+	case v.running:
+		return "p pause · c cancel · ↑/↓ scroll"
+	case v.paused:
+		return "r resume · c cancel · ↑/↓ scroll"
+	default:
+		return "s sync · e embed · a sync+embed · ↑/↓ scroll"
 	}
-	return "s sync · e embed · a sync+embed · ↑/↓ scroll"
 }
 
 // statusLine renders the single dynamic line above the log: a spinner with live
@@ -215,6 +315,16 @@ func (v *syncView) statusLine() string {
 		return v.spinner.View() + helpStyle.Render(fmt.Sprintf(
 			" Embedding…%s %d/%d chunks · %d errors",
 			batch, v.embedded, v.embTotal, v.embErrored))
+	case v.paused && v.pausedPhase == phaseSyncing:
+		return warnStyle.Render(fmt.Sprintf(
+			"⏸ Paused — %d synced · %d skipped · %d errors",
+			v.syncSynced, v.syncSkipped, v.syncErrors)) +
+			helpStyle.Render("  Press r to resume or c to cancel.")
+	case v.paused:
+		return warnStyle.Render(fmt.Sprintf(
+			"⏸ Paused — %d/%d chunks · %d errors",
+			v.embedded, v.embTotal, v.embErrored)) +
+			helpStyle.Render("  Press r to resume or c to cancel.")
 	case v.err != nil:
 		return errStyle.Render("Error: " + v.err.Error())
 	case v.hasRun:
@@ -231,6 +341,24 @@ func (v *syncView) renderLog() string {
 	return strings.Join(v.lines, "\n")
 }
 
+// markSeen records a repo in the per-operation dedup set and reports whether it
+// was already present. It lets a resumed sync ignore repos it already tallied
+// (they re-appear as skip events on the re-run). A fresh run starts with an empty
+// set; an empty repo name is never deduped.
+func (v *syncView) markSeen(repo string) bool {
+	if repo == "" {
+		return false
+	}
+	if v.seenRepos == nil {
+		v.seenRepos = make(map[string]bool)
+	}
+	if v.seenRepos[repo] {
+		return true
+	}
+	v.seenRepos[repo] = true
+	return false
+}
+
 // appendLine adds one log line, trimming the oldest once the cap is hit.
 func (v *syncView) appendLine(s string) {
 	v.lines = append(v.lines, s)
@@ -245,18 +373,28 @@ func (v *syncView) beginSync(chain bool) tea.Cmd {
 	// Release any prior run's context (a no-op from a keypress, since triggers are
 	// inert while running; live only on the chain hand-off from a finished sync).
 	v.releaseStream()
+	resuming := v.resuming
+	v.resuming = false
 	v.gen++
 	v.phase = phaseSyncing
 	v.running = true
 	v.chain = chain
 	v.err = nil
-	v.syncSynced, v.syncSkipped, v.syncErrors = 0, 0, 0
+	// On a fresh run reset the tallies and the per-repo dedup set; on resume keep
+	// both so already-synced repos (re-emitted as skips) aren't double-counted.
+	if !resuming {
+		v.syncSynced, v.syncSkipped, v.syncErrors = 0, 0, 0
+		v.seenRepos = make(map[string]bool)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	v.streamCtx = ctx
 	v.cancel = cancel
-	if chain {
+	switch {
+	case resuming:
+		// "▶ Resumed" was already logged by resume().
+	case chain:
 		v.appendLine(titleStyle.Render("▶ Sync + embed started"))
-	} else {
+	default:
 		v.appendLine(titleStyle.Render("▶ Sync started"))
 	}
 	return tea.Batch(v.spinner.Tick, runSyncCmd(v.app, v.gen, ctx))
@@ -270,17 +408,29 @@ func (v *syncView) beginEmbed(issueTick bool) tea.Cmd {
 	// On the chain hand-off this cancels the just-finished sync's context (a
 	// no-op — its producer has already closed) before opening a fresh one.
 	v.releaseStream()
+	resuming := v.resuming
+	v.resuming = false
 	v.gen++
 	v.phase = phaseEmbedding
 	v.running = true
 	v.chain = false
 	v.err = nil
-	v.embedded, v.embSkipped, v.embErrored, v.embTotal = 0, 0, 0, 0
+	// A resume carries the pre-suspend totals (snapshotted into base* by suspend);
+	// handleEmbedEvent renders base + the resumed run's cumulative counts. A fresh
+	// run zeroes everything, including the baseline.
+	v.embCarrying = resuming
+	if !resuming {
+		v.baseEmbedded, v.baseEmbErrored, v.baseEmbSkipped, v.baseEmbTotal = 0, 0, 0, 0
+		v.embedded, v.embSkipped, v.embErrored, v.embTotal = 0, 0, 0, 0
+	}
 	v.embBatch, v.embBatchTotal = 0, 0
 	ctx, cancel := context.WithCancel(context.Background())
 	v.streamCtx = ctx
 	v.cancel = cancel
-	v.appendLine(titleStyle.Render("▶ Embed started"))
+	if !resuming {
+		// "▶ Resumed" was already logged by resume().
+		v.appendLine(titleStyle.Render("▶ Embed started"))
+	}
 	if issueTick {
 		return tea.Batch(v.spinner.Tick, runEmbedCmd(v.app, v.gen, ctx))
 	}
@@ -295,6 +445,9 @@ func (v *syncView) handleSyncEvent(msg syncEventMsg) (view, tea.Cmd) {
 	}
 	switch ev := msg.ev; ev.Type {
 	case "repo":
+		if v.markSeen(ev.Repo) {
+			break // already tallied (e.g. re-emitted after a resume)
+		}
 		v.syncSynced++
 		label := "new"
 		if ev.Status == "updated" {
@@ -303,15 +456,22 @@ func (v *syncView) handleSyncEvent(msg syncEventMsg) (view, tea.Cmd) {
 		v.appendLine(okStyle.Render("✓ ") + fmt.Sprintf("%-8s %s", label, ev.Repo))
 	case "skip":
 		// Skips are common (unchanged repos); track the count but keep them out
-		// of the log so the interesting events stay visible.
+		// of the log so the interesting events stay visible. A resumed run re-emits
+		// already-synced repos as skips — markSeen keeps them from double-counting.
+		if v.markSeen(ev.Repo) {
+			break
+		}
 		v.syncSkipped++
 	case "error":
+		if v.markSeen(ev.Repo) {
+			break
+		}
 		v.syncErrors++
 		v.appendLine(errStyle.Render("✗ ") + ev.Repo + helpStyle.Render(" ("+ev.Reason+")"))
 	case "done":
-		// The done event carries authoritative totals.
-		v.syncSynced, v.syncSkipped, v.syncErrors = ev.Total, ev.Skipped, ev.Errors
-		v.appendLine(bannerSync(ev))
+		// Counts are derived incrementally (and deduped across a resume), so the
+		// done event's per-run totals must not overwrite them; it only finalizes.
+		v.appendLine(bannerSync(v.syncSynced, v.syncSkipped, v.syncErrors))
 		return v.finishSync()
 	}
 	return v, waitForSyncEvent(v.streamCtx, v.syncCh, v.gen)
@@ -337,10 +497,7 @@ func (v *syncView) handleEmbedEvent(msg embedEventMsg) (view, tea.Cmd) {
 	}
 	switch ev := msg.ev; ev.Type {
 	case "batch":
-		v.embedded = ev.ChunksEmbedded
-		v.embSkipped = ev.ChunksSkipped
-		v.embErrored = ev.ChunksErrored
-		v.embTotal = ev.TotalChunks
+		v.applyEmbedCounts(ev)
 		v.embBatch = ev.BatchIndex
 		v.embBatchTotal = ev.BatchTotal
 		for _, e := range dedupeStrings(ev.Errors) {
@@ -352,20 +509,38 @@ func (v *syncView) handleEmbedEvent(msg embedEventMsg) (view, tea.Cmd) {
 		v.embErrored++
 		v.appendLine(errStyle.Render("✗ ") + ev.RepoFullName)
 	case "done":
-		v.embedded = ev.ChunksEmbedded
-		v.embSkipped = ev.ChunksSkipped
-		v.embErrored = ev.ChunksErrored
-		v.embTotal = ev.TotalChunks
-		v.appendLine(bannerEmbed(ev))
+		v.applyEmbedCounts(ev)
+		v.appendLine(bannerEmbed(v.embedded, v.embSkipped, v.embErrored))
 		return v.finishEmbed()
 	}
 	return v, waitForEmbedEvent(v.streamCtx, v.embedCh, v.gen)
+}
+
+// applyEmbedCounts folds a batch/done event's cumulative counts into the live
+// tallies. On a fresh run the event's totals are authoritative. On a resumed run
+// (embCarrying) the pipeline re-reports only the un-embedded chunks, so its
+// embedded/errored counts are added onto the pre-suspend baseline, and the total
+// and skipped counts are held at their pre-suspend values so the scope of the run
+// stays continuous rather than shrinking to just the remainder.
+func (v *syncView) applyEmbedCounts(ev embed.EmbedEvent) {
+	v.embedded = v.baseEmbedded + ev.ChunksEmbedded
+	v.embErrored = v.baseEmbErrored + ev.ChunksErrored
+	if v.embCarrying {
+		v.embTotal = v.baseEmbTotal
+		v.embSkipped = v.baseEmbSkipped
+	} else {
+		v.embTotal = ev.TotalChunks
+		v.embSkipped = ev.ChunksSkipped
+	}
 }
 
 func (v *syncView) finishEmbed() (view, tea.Cmd) {
 	v.embedCh = nil
 	v.releaseStream()
 	v.running = false
+	v.paused = false
+	v.resuming = false
+	v.embCarrying = false
 	v.phase = phaseIdle
 	v.chain = false
 	v.hasRun = true
@@ -513,22 +688,22 @@ func runEmbedCmd(app *appContext, gen int, ctx context.Context) tea.Cmd {
 
 // bannerSync / bannerEmbed render the terminal summary line, tinted red when the
 // run reported errors (matching the CLI's completion message).
-func bannerSync(ev sync.IngestEvent) string {
+func bannerSync(synced, skipped, errors int) string {
 	style := okStyle
-	if ev.Errors > 0 {
+	if errors > 0 {
 		style = errStyle
 	}
 	return style.Render(fmt.Sprintf("✓ Sync complete — %d synced, %d skipped, %d errors",
-		ev.Total, ev.Skipped, ev.Errors))
+		synced, skipped, errors))
 }
 
-func bannerEmbed(ev embed.EmbedEvent) string {
+func bannerEmbed(embedded, skipped, errored int) string {
 	style := okStyle
-	if ev.ChunksErrored > 0 {
+	if errored > 0 {
 		style = errStyle
 	}
 	return style.Render(fmt.Sprintf("✓ Embedding complete — %d embedded, %d skipped, %d errors",
-		ev.ChunksEmbedded, ev.ChunksSkipped, ev.ChunksErrored))
+		embedded, skipped, errored))
 }
 
 // dedupeStrings preserves order while dropping repeats — embed batches often

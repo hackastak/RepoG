@@ -16,6 +16,7 @@ var (
 	colorMuted  = lipgloss.Color("241") // dim gray — inactive/help
 	colorErr    = lipgloss.Color("203") // red — errors
 	colorOK     = lipgloss.Color("78")  // green — success
+	colorWarn   = lipgloss.Color("214") // amber — paused/attention
 )
 
 var (
@@ -43,6 +44,7 @@ var (
 	// titleStyle is used by placeholder views and headers.
 	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
 
-	errStyle = lipgloss.NewStyle().Foreground(colorErr)
-	okStyle  = lipgloss.NewStyle().Foreground(colorOK)
+	errStyle  = lipgloss.NewStyle().Foreground(colorErr)
+	okStyle   = lipgloss.NewStyle().Foreground(colorOK)
+	warnStyle = lipgloss.NewStyle().Foreground(colorWarn)
 )
