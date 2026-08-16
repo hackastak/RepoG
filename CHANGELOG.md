@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Retry with backoff on provider API calls.** Every embedding and generation request now routes through a shared `provider.DoWithRetry` helper that retries transient failures — network errors and HTTP 429/5xx — with jittered exponential backoff, honoring a `Retry-After` header when the server sends one and returning immediately on context cancellation. Previously the AI providers had no retry at all, unlike the GitHub client, so a single rate-limit response permanently failed that batch of embeddings and the pipeline marched through every remaining batch failing instantly. All six providers share the one helper.
+- **Suspend, resume, and cancel for TUI sync and embed runs.** While a run is in flight the Sync/Embed view now answers `p` to suspend it (keeping an in-session resume point), `r` to resume, and `c` to cancel back to idle — previously the only way to stop a multi-minute run was to quit the whole app. All three cancel the run's context, so nothing is left holding a goroutine, HTTP request, or SQLite write; resume re-issues the same pipeline, which skips completed work via the database's incremental hashes (`pushed_at_hash`, `chunk_embeddings`) and carries its progress counters forward. No stop rolls back work already committed, and the resume point is in-memory only, so quitting starts fresh. See [ADR-011](docs/adr/ADR-011-cancel-and-suspend-for-interactive-sync-and-embed.md).
 
 ### Fixed
 
