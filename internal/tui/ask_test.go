@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -30,6 +31,7 @@ func TestAskViewStreamsChunks(t *testing.T) {
 	v := newAskView(&appContext{})
 	v.streaming = true
 	v.stream = make(chan tea.Msg, 4)
+	v.streamCtx = context.Background()
 	v.lastQ = "what is bubbletea"
 
 	updated, cmd := v.Update(askChunkMsg{gen: v.gen, chunk: "Bubble "})

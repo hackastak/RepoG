@@ -58,7 +58,7 @@ func maskSecret(secret string) string {
 }
 
 // selectEmbeddingProvider guides the user through embedding provider configuration
-func selectEmbeddingProvider(providerFlag, apiKeyFlag string, red, dim, green func(...interface{}) string) (config.ProviderConfig, string) {
+func selectEmbeddingProvider(ctx context.Context, providerFlag, apiKeyFlag string, red, dim, green func(...interface{}) string) (config.ProviderConfig, string) {
 	var selectedProvider string
 	var apiKey string
 
@@ -156,7 +156,7 @@ func selectEmbeddingProvider(providerFlag, apiKeyFlag string, red, dim, green fu
 		os.Exit(1)
 	}
 
-	if err := embedProvider.Validate(context.Background()); err != nil {
+	if err := embedProvider.Validate(ctx); err != nil {
 		s.Stop()
 		fmt.Println(red("✗"), fmt.Sprintf("%s embedding validation failed:", selectedProvider), err)
 		os.Exit(1)
@@ -222,7 +222,7 @@ func selectEmbeddingProvider(providerFlag, apiKeyFlag string, red, dim, green fu
 
 // selectGenerationProvider guides the user through generation provider configuration
 // embedProvider and embedAPIKey are passed so we can offer to reuse the same key if providers match
-func selectGenerationProvider(providerFlag, apiKeyFlag, embedProvider, embedAPIKey string, red, dim, green func(...interface{}) string) (config.ProviderConfig, string) {
+func selectGenerationProvider(ctx context.Context, providerFlag, apiKeyFlag, embedProvider, embedAPIKey string, red, dim, green func(...interface{}) string) (config.ProviderConfig, string) {
 	var selectedProvider string
 	var apiKey string
 
@@ -335,7 +335,7 @@ func selectGenerationProvider(providerFlag, apiKeyFlag, embedProvider, embedAPIK
 		os.Exit(1)
 	}
 
-	if err := llmProvider.Validate(context.Background()); err != nil {
+	if err := llmProvider.Validate(ctx); err != nil {
 		s.Stop()
 		fmt.Println(red("✗"), fmt.Sprintf("%s generation validation failed:", selectedProvider), err)
 		os.Exit(1)
@@ -417,7 +417,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	s.Start()
 
 	client := github.NewClient(githubToken)
-	patResult := github.ValidatePAT(context.Background(), client)
+	patResult := github.ValidatePAT(commandContext(cmd), client)
 	s.Stop()
 
 	if !patResult.Valid {
@@ -428,8 +428,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println(green("✓"), "Fine-grained PAT validated - logged in as @"+patResult.Login)
 
 	// Provider selection and configuration
-	embedCfg, embedAPIKey := selectEmbeddingProvider(initEmbedProvider, initEmbedAPIKey, red, dim, green)
-	genCfg, genAPIKey := selectGenerationProvider(initGenProvider, initGenAPIKey, embedCfg.Provider, embedAPIKey, red, dim, green)
+	embedCfg, embedAPIKey := selectEmbeddingProvider(commandContext(cmd), initEmbedProvider, initEmbedAPIKey, red, dim, green)
+	genCfg, genAPIKey := selectGenerationProvider(commandContext(cmd), initGenProvider, initGenAPIKey, embedCfg.Provider, embedAPIKey, red, dim, green)
 
 	// Get database path
 	dbPath := initDBPath

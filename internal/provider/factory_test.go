@@ -1,6 +1,7 @@
 package provider_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/hackastak/repog/internal/config"
@@ -100,5 +101,78 @@ func TestUnknownProvider(t *testing.T) {
 	_, err = provider.NewLLMProvider(cfg, "fake-key")
 	if err == nil {
 		t.Error("Expected error for unknown provider, got nil")
+	}
+}
+
+// When cfg.MaxTokens is set, NewEmbeddingProvider returns a wrapper that overrides
+// MaxTokens and inherits the rest from the embedded provider by method promotion.
+// These tests pin that every non-overridden method still reaches the wrapped
+// provider, so the promotion can't silently regress into a no-op or a zero value.
+func TestMaxTokensOverride(t *testing.T) {
+	const overrideTokens = 4096
+
+	inner := provider.NewMockEmbeddingProvider() // name "mock", 768 dims, batch 20, 8192 tokens
+	var queriedWith string
+	inner.QueryFunc = func(_ context.Context, query string) []float32 {
+		queriedWith = query
+		return []float32{1, 2, 3}
+	}
+
+	provider.RegisterEmbeddingProvider("wrappertest", func(_ config.ProviderConfig, _ string) (provider.EmbeddingProvider, error) {
+		return inner, nil
+	})
+
+	cfg := config.ProviderConfig{Provider: "wrappertest", Model: "test", Dimensions: 768, MaxTokens: overrideTokens}
+	wrapped, err := provider.NewEmbeddingProvider(cfg, "fake-key")
+	if err != nil {
+		t.Fatalf("NewEmbeddingProvider() error = %v", err)
+	}
+
+	// The one method the wrapper exists to change.
+	if got := wrapped.MaxTokens(); got != overrideTokens {
+		t.Errorf("MaxTokens() = %d, want %d (config override)", got, overrideTokens)
+	}
+
+	// Everything else must still reach the wrapped provider.
+	if got := wrapped.Name(); got != "mock" {
+		t.Errorf("Name() = %q, want %q (promoted from embedded provider)", got, "mock")
+	}
+	if got := wrapped.Dimensions(); got != 768 {
+		t.Errorf("Dimensions() = %d, want 768 (promoted)", got)
+	}
+	if got := wrapped.BatchSize(); got != 20 {
+		t.Errorf("BatchSize() = %d, want 20 (promoted)", got)
+	}
+	if err := wrapped.Validate(context.Background()); err != nil {
+		t.Errorf("Validate() = %v, want nil (promoted)", err)
+	}
+
+	if got := wrapped.EmbedQuery(context.Background(), "hello"); len(got) != 3 {
+		t.Errorf("EmbedQuery() returned %d dims, want 3 from the wrapped provider", len(got))
+	}
+	if queriedWith != "hello" {
+		t.Errorf("EmbedQuery() passed %q to the wrapped provider, want %q", queriedWith, "hello")
+	}
+
+	res := wrapped.EmbedChunks(context.Background(), []provider.EmbedRequest{{ID: 7, Content: "x"}})
+	if len(res.Results) != 1 || res.Results[0].ID != 7 {
+		t.Errorf("EmbedChunks() = %+v, want one result with ID 7 from the wrapped provider", res.Results)
+	}
+}
+
+func TestMaxTokensNotOverriddenWhenUnset(t *testing.T) {
+	inner := provider.NewMockEmbeddingProvider()
+	provider.RegisterEmbeddingProvider("wrappertest-unset", func(_ config.ProviderConfig, _ string) (provider.EmbeddingProvider, error) {
+		return inner, nil
+	})
+
+	cfg := config.ProviderConfig{Provider: "wrappertest-unset", Model: "test", Dimensions: 768} // MaxTokens left at 0
+	p, err := provider.NewEmbeddingProvider(cfg, "fake-key")
+	if err != nil {
+		t.Fatalf("NewEmbeddingProvider() error = %v", err)
+	}
+
+	if got := p.MaxTokens(); got != 8192 {
+		t.Errorf("MaxTokens() = %d, want 8192 (model default, unwrapped)", got)
 	}
 }

@@ -31,7 +31,9 @@ func NewGeminiLLMProvider(apiKey, model, fallbackModel string) (*GeminiLLMProvid
 		model = "gemini-2.5-flash"
 	}
 	if fallbackModel == "" {
-		fallbackModel = "gemini-3.0-flash"
+		// The fallback is tried only when the primary returns 404 (model name not
+		// found), so it must be an older, widely-available model, not a newer one.
+		fallbackModel = "gemini-2.0-flash"
 	}
 
 	return &GeminiLLMProvider{
@@ -106,7 +108,7 @@ func (g *GeminiLLMProvider) Call(ctx context.Context, req provider.LLMRequest) (
 
 	var lastError *provider.LLMError
 	for _, model := range models {
-		url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", g.baseURL, model, g.apiKey)
+		url := fmt.Sprintf("%s/models/%s:generateContent", g.baseURL, model)
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
 		if err != nil {
 			return nil, &provider.LLMError{
@@ -115,8 +117,11 @@ func (g *GeminiLLMProvider) Call(ctx context.Context, req provider.LLMRequest) (
 			}
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
+		// Pass the key as a header, not a query param, so it can't leak into a
+		// *url.Error message that gets rendered to the terminal or TUI.
+		httpReq.Header.Set("x-goog-api-key", g.apiKey)
 
-		resp, err := client.Do(httpReq)
+		resp, err := provider.DoWithRetry(ctx, client, httpReq)
 		if err != nil {
 			return nil, &provider.LLMError{
 				Message:    err.Error(),
@@ -218,7 +223,7 @@ func (g *GeminiLLMProvider) Stream(ctx context.Context, req provider.LLMRequest,
 
 	var lastError *provider.LLMError
 	for _, model := range models {
-		url := fmt.Sprintf("%s/models/%s:streamGenerateContent?alt=sse&key=%s", g.baseURL, model, g.apiKey)
+		url := fmt.Sprintf("%s/models/%s:streamGenerateContent?alt=sse", g.baseURL, model)
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
 		if err != nil {
 			return nil, &provider.LLMError{
@@ -227,8 +232,9 @@ func (g *GeminiLLMProvider) Stream(ctx context.Context, req provider.LLMRequest,
 			}
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("x-goog-api-key", g.apiKey)
 
-		resp, err := client.Do(httpReq)
+		resp, err := provider.DoWithRetry(ctx, client, httpReq)
 		if err != nil {
 			return nil, &provider.LLMError{
 				Message:    err.Error(),

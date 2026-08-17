@@ -9,7 +9,7 @@ RepoG is a Go CLI tool for AI-powered knowledge management of GitHub repositorie
 ## Development Workflow
 
 ### Prerequisites
-- Go 1.22+
+- Go 1.25+
 - C compiler (GCC/Clang) for CGO
 - `golangci-lint` for linting
 

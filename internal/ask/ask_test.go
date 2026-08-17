@@ -3,6 +3,7 @@ package ask
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -335,13 +336,30 @@ func TestAskQuestion_HandlesLLMError(t *testing.T) {
 		LLMProvider:       mockLLM,
 	}, nil)
 
-	// Should not return Go error, but Answer should contain error message
-	if err != nil {
-		t.Fatalf("Expected no Go error, got %v", err)
+	// An LLM failure must surface as a Go error, not as answer text: callers
+	// decide how to report it, and `repog ask` exits non-zero because of it.
+	if err == nil {
+		t.Fatal("Expected an error when the LLM call fails, got nil")
 	}
 
-	if !containsString(result.Answer, "Error generating answer") {
-		t.Errorf("Expected error message in answer, got '%s'", result.Answer)
+	// The underlying *provider.LLMError must survive wrapping, so callers can
+	// inspect the status code (e.g. to tell a retryable 429 from a fatal 401).
+	var llmErr *provider.LLMError
+	if !errors.As(err, &llmErr) {
+		t.Fatalf("Expected error to wrap *provider.LLMError, got %T: %v", err, err)
+	}
+	if llmErr.StatusCode != 500 {
+		t.Errorf("StatusCode = %d, want 500", llmErr.StatusCode)
+	}
+
+	// The answer is not filled with an error string masquerading as content.
+	if containsString(result.Answer, "Error generating answer") {
+		t.Errorf("Error text leaked into Answer: %q", result.Answer)
+	}
+
+	// Retrieval succeeded, so the sources it found are still reported.
+	if len(result.Sources) == 0 {
+		t.Error("Expected sources to be populated even when generation fails")
 	}
 }
 

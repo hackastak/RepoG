@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -60,7 +59,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		s.Start()
 	}
 
-	ctx := context.Background()
+	ctx := commandContext(cmd)
 
 	// Gather local stats (fast, no network).
 	result, err := status.Collect(ctx, database, cfg.DBPath)

@@ -51,14 +51,14 @@ func buildSummarizePrompt(repo string, chunks []chunkRecord) string {
 		contextParts = append(contextParts, fmt.Sprintf("--- %s ---\n%s", chunk.ChunkType, chunk.Content))
 	}
 
-	context := strings.Join(contextParts, "\n\n")
+	contextBlock := strings.Join(contextParts, "\n\n")
 
 	return fmt.Sprintf(`Please summarize the following GitHub repository.
 
 Repository: %s
 
 Context:
-%s`, repo, context)
+%s`, repo, contextBlock)
 }
 
 // SummarizeRepo generates a structured AI summary of a repository.
@@ -77,9 +77,8 @@ func SummarizeRepo(ctx context.Context, opts SummarizeOptions, onChunk func(stri
 		ORDER BY c.chunk_type ASC
 	`, opts.Repo)
 	if err != nil {
-		result.Summary = fmt.Sprintf("Error querying database: %s", err.Error())
 		result.DurationMs = time.Since(start).Milliseconds()
-		return result, nil
+		return result, fmt.Errorf("querying chunks for %s: %w", opts.Repo, err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -116,8 +115,7 @@ func SummarizeRepo(ctx context.Context, opts SummarizeOptions, onChunk func(stri
 	result.DurationMs = time.Since(start).Milliseconds()
 
 	if llmErr != nil {
-		result.Summary = fmt.Sprintf("Error generating summary: %s", llmErr.Message)
-		return result, nil
+		return result, fmt.Errorf("generating summary for %s: %w", opts.Repo, llmErr)
 	}
 
 	result.Summary = llmResult.Text

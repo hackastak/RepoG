@@ -23,7 +23,7 @@ These are the items that gate a `v1.0.0` tag.
 
 | Area | Goal | Status |
 |------|------|--------|
-| **Full code-base syncing** | Deep, clone-based sync that indexes real source code (not just metadata and READMEs), with cost guardrails: opt-in `--deep`, file-size caps, and `.repogignore` support. | Next up — `v0.4.0` |
+| **Full code-base syncing** | Deep, clone-based sync that indexes real source code (not just metadata and READMEs), with cost guardrails: opt-in `--deep`, file-size caps, and `.repogignore` support. | Next up — `v0.5.0` |
 | **Incremental syncing speed** | Re-sync only what changed instead of re-ingesting everything. A hard gate: `v1.0.0` will not ship before this lands. | Planned (v1.0 gate) |
 | **Embedding generation speed** | Faster embedding through better batching and parallelism. | Planned |
 | **Knowledge-graph / docs export** | A command to generate documentation and a knowledge graph from indexed repos. | Planned |

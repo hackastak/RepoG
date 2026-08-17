@@ -127,7 +127,7 @@ func (o *OpenRouterLLMProvider) Call(ctx context.Context, req provider.LLMReques
 		httpReq.Header.Set("Authorization", "Bearer "+o.apiKey)
 		httpReq.Header.Set("X-Title", "RepoG")
 
-		resp, err := client.Do(httpReq)
+		resp, err := provider.DoWithRetry(ctx, client, httpReq)
 		if err != nil {
 			return nil, &provider.LLMError{
 				Message:    err.Error(),
@@ -250,7 +250,7 @@ func (o *OpenRouterLLMProvider) Stream(ctx context.Context, req provider.LLMRequ
 		httpReq.Header.Set("Authorization", "Bearer "+o.apiKey)
 		httpReq.Header.Set("X-Title", "RepoG")
 
-		resp, err := client.Do(httpReq)
+		resp, err := provider.DoWithRetry(ctx, client, httpReq)
 		if err != nil {
 			return nil, &provider.LLMError{
 				Message:    err.Error(),

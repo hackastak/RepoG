@@ -218,8 +218,8 @@ The migration time trade-off is acceptable because:
   - [[ADR-001]] - SQLite choice impacts migration options (can't ALTER virtual tables)
   - [[ADR-004]] - Dynamic chunking uses similar clear-on-change pattern
 - Supporting docs:
-  - [MULTI_MODEL_IMPLEMENTATION_SUMMARY.md](../../MULTI_MODEL_IMPLEMENTATION_SUMMARY.md) - Migration behavior
-  - [DYNAMIC_CHUNKING.md](../../DYNAMIC_CHUNKING.md) - Similar chunking migration strategy
+  - [UPGRADING.md](../UPGRADING.md) - User-facing migration behavior
+  - [chunking.md](../chunking.md) - Similar chunking migration strategy
 - Supporting code:
   - `commands/reconfig.go` - Migration detection (`embeddingChanged`), user warning/confirmation, and the `clearEmbeddings` table-recreation logic
   - `internal/db/db.go` - `MigrateEmbeddingDimensions` table-recreation helper

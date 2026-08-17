@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -114,7 +113,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	s.Suffix = " Searching..."
 	s.Start()
 
-	result, err := search.SearchRepos(context.Background(), database, embedProvider, query, filters)
+	result, err := search.SearchRepos(commandContext(cmd), database, embedProvider, query, filters)
 	s.Stop()
 
 	if err != nil {

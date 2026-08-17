@@ -104,7 +104,7 @@ func runReconfig(cmd *cobra.Command, args []string) error {
 
 	// Handle GitHub PAT reconfiguration separately (doesn't need full config)
 	if reconfigureGitHub {
-		return runReconfigGitHub(reconfigGitHubToken, green, red, dim, bold)
+		return runReconfigGitHub(commandContext(cmd), reconfigGitHubToken, green, red, dim, bold)
 	}
 
 	// Store original embedding config to detect changes
@@ -116,7 +116,7 @@ func runReconfig(cmd *cobra.Command, args []string) error {
 
 	// Reconfigure embedding
 	if reconfigureEmbedding {
-		newEmbedCfg, newEmbedAPIKey := reconfigureEmbeddingProvider(cfg.Embedding, reconfigProvider, reconfigModel, reconfigDimensions, reconfigMaxTokens, reconfigBaseURL, reconfigAPIKey, red, dim, green, yellow)
+		newEmbedCfg, newEmbedAPIKey := reconfigureEmbeddingProvider(commandContext(cmd), cfg.Embedding, reconfigProvider, reconfigModel, reconfigDimensions, reconfigMaxTokens, reconfigBaseURL, reconfigAPIKey, red, dim, green, yellow)
 		currentEmbedProvider = newEmbedCfg.Provider
 		currentEmbedAPIKey = newEmbedAPIKey
 
@@ -247,7 +247,7 @@ func runReconfig(cmd *cobra.Command, args []string) error {
 			currentEmbedProvider = cfg.Embedding.Provider
 			currentEmbedAPIKey, _ = config.GetAPIKeyForProvider(cfg.Embedding.Provider)
 		}
-		newGenCfg, newGenAPIKey := reconfigureGenerationProvider(cfg.Generation, reconfigProvider, reconfigModel, reconfigFallback, reconfigBaseURL, reconfigAPIKey, currentEmbedProvider, currentEmbedAPIKey, red, dim, green)
+		newGenCfg, newGenAPIKey := reconfigureGenerationProvider(commandContext(cmd), cfg.Generation, reconfigProvider, reconfigModel, reconfigFallback, reconfigBaseURL, reconfigAPIKey, currentEmbedProvider, currentEmbedAPIKey, red, dim, green)
 
 		// Update config
 		cfg.Generation = newGenCfg
@@ -302,7 +302,7 @@ func runReconfig(cmd *cobra.Command, args []string) error {
 }
 
 // runReconfigGitHub handles GitHub PAT reconfiguration
-func runReconfigGitHub(tokenFlag string, green, red, dim, bold func(...interface{}) string) error {
+func runReconfigGitHub(ctx context.Context, tokenFlag string, green, red, dim, bold func(...interface{}) string) error {
 	fmt.Println(bold("GitHub Token Update"))
 	fmt.Println()
 
@@ -341,7 +341,7 @@ func runReconfigGitHub(tokenFlag string, green, red, dim, bold func(...interface
 	s.Start()
 
 	client := github.NewClient(githubToken)
-	patResult := github.ValidatePAT(context.Background(), client)
+	patResult := github.ValidatePAT(ctx, client)
 	s.Stop()
 
 	if !patResult.Valid {
@@ -370,7 +370,7 @@ func runReconfigGitHub(tokenFlag string, green, red, dim, bold func(...interface
 }
 
 // reconfigureEmbeddingProvider handles embedding provider reconfiguration
-func reconfigureEmbeddingProvider(current config.ProviderConfig, providerFlag, modelFlag string, dimensionsFlag, maxTokensFlag int, baseURLFlag, apiKeyFlag string, red, dim, green, yellow func(...interface{}) string) (config.ProviderConfig, string) {
+func reconfigureEmbeddingProvider(ctx context.Context, current config.ProviderConfig, providerFlag, modelFlag string, dimensionsFlag, maxTokensFlag int, baseURLFlag, apiKeyFlag string, red, dim, green, yellow func(...interface{}) string) (config.ProviderConfig, string) {
 	var selectedProvider string
 	var apiKey string
 	var model string
@@ -627,7 +627,7 @@ func reconfigureEmbeddingProvider(current config.ProviderConfig, providerFlag, m
 		os.Exit(1)
 	}
 
-	if err := embedProvider.Validate(context.Background()); err != nil {
+	if err := embedProvider.Validate(ctx); err != nil {
 		s.Stop()
 		fmt.Println(red("✗"), fmt.Sprintf("%s embedding validation failed:", selectedProvider), err)
 		os.Exit(1)
@@ -641,7 +641,7 @@ func reconfigureEmbeddingProvider(current config.ProviderConfig, providerFlag, m
 
 // reconfigureGenerationProvider handles generation provider reconfiguration
 // embedProvider and embedAPIKey are passed so we can offer to reuse the same key if providers match
-func reconfigureGenerationProvider(current config.ProviderConfig, providerFlag, modelFlag, fallbackFlag, baseURLFlag, apiKeyFlag, embedProvider, embedAPIKey string, red, dim, green func(...interface{}) string) (config.ProviderConfig, string) {
+func reconfigureGenerationProvider(ctx context.Context, current config.ProviderConfig, providerFlag, modelFlag, fallbackFlag, baseURLFlag, apiKeyFlag, embedProvider, embedAPIKey string, red, dim, green func(...interface{}) string) (config.ProviderConfig, string) {
 	var selectedProvider string
 	var apiKey string
 	var model string
@@ -833,7 +833,7 @@ func reconfigureGenerationProvider(current config.ProviderConfig, providerFlag, 
 		os.Exit(1)
 	}
 
-	if err := llmProvider.Validate(context.Background()); err != nil {
+	if err := llmProvider.Validate(ctx); err != nil {
 		s.Stop()
 		fmt.Println(red("✗"), fmt.Sprintf("%s generation validation failed:", selectedProvider), err)
 		os.Exit(1)

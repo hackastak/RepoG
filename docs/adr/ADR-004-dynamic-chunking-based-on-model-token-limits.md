@@ -202,7 +202,7 @@ The efficiency trade-off (using ~75% vs. ~95% of capacity) is acceptable because
 - Related ADRs:
   - [[ADR-003]] - Uses similar clear-on-change pattern when chunk size changes
 - Supporting docs:
-  - [DYNAMIC_CHUNKING.md](../../DYNAMIC_CHUNKING.md) - Detailed explanation and examples
+  - [chunking.md](../chunking.md) - Detailed explanation and examples
 - Supporting code:
   - `internal/sync/ingest.go` - `CalculateMaxCharsFromTokens` (chunk size formula) and `splitContent`
   - `internal/provider/*/embedding.go` - per-model `MaxTokens` metadata (gemini, openai, openrouter, voyageai, ollama)

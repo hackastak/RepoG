@@ -64,6 +64,7 @@ Create an ADR when making decisions about:
 | [ADR-008](./ADR-008-shell-to-system-git-for-deep-sync-cloning.md) | Shell to System Git for Deep-Sync Cloning | Decided — deferred to V0.4.0 | 2026-06-10 |
 | [ADR-009](./ADR-009-size-bounded-line-aware-chunking-for-code.md) | Size-Bounded, Line-Aware Chunking for Source Code | Deferred to V0.4.0 | 2026-06-10 |
 | [ADR-010](./ADR-010-use-bubbletea-for-the-tui.md) | Use Bubbletea for the Interactive TUI | Decided (V0.3.0) | 2026-06-12 |
+| [ADR-011](./ADR-011-cancel-and-suspend-for-interactive-sync-and-embed.md) | Cancel and Suspend for Interactive Sync and Embed Runs | Decided | 2026-08-06 |
 
 ## References
 

@@ -162,7 +162,7 @@ func (g *GeminiEmbeddingProvider) EmbedChunks(ctx context.Context, chunks []prov
 	}
 
 	// Make HTTP request
-	url := fmt.Sprintf("%s/models/%s:batchEmbedContents?key=%s", g.baseURL, g.model, g.apiKey)
+	url := fmt.Sprintf("%s/models/%s:batchEmbedContents", g.baseURL, g.model)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		result.Errors = len(chunks)
@@ -176,9 +176,11 @@ func (g *GeminiEmbeddingProvider) EmbedChunks(ctx context.Context, chunks []prov
 		return result
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Key goes in a header, not the URL, so a *url.Error can't leak it.
+	req.Header.Set("x-goog-api-key", g.apiKey)
 
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := provider.DoWithRetry(ctx, client, req)
 	if err != nil {
 		result.Errors = len(chunks)
 		for _, chunk := range chunks {
@@ -280,15 +282,16 @@ func (g *GeminiEmbeddingProvider) EmbedQuery(ctx context.Context, query string) 
 		return nil
 	}
 
-	url := fmt.Sprintf("%s/models/%s:embedContent?key=%s", g.baseURL, g.model, g.apiKey)
+	url := fmt.Sprintf("%s/models/%s:embedContent", g.baseURL, g.model)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-goog-api-key", g.apiKey)
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := provider.DoWithRetry(ctx, client, req)
 	if err != nil {
 		return nil
 	}

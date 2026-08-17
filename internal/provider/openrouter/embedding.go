@@ -181,7 +181,7 @@ func (o *OpenRouterEmbeddingProvider) EmbedChunks(ctx context.Context, chunks []
 	req.Header.Set("X-Title", "RepoG")
 
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := provider.DoWithRetry(ctx, client, req)
 	if err != nil {
 		result.Errors = len(chunks)
 		for _, chunk := range chunks {
@@ -327,7 +327,7 @@ func (o *OpenRouterEmbeddingProvider) EmbedQuery(ctx context.Context, query stri
 	req.Header.Set("X-Title", "RepoG")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := provider.DoWithRetry(ctx, client, req)
 	if err != nil {
 		return nil
 	}

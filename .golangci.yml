@@ -16,16 +16,10 @@ formatters:
   enable:
     - gofmt
     - goimports
-
-formatters-settings:
-  goimports:
-    local-prefixes:
-      - github.com/hackastak/repog
-
-linters-settings:
-  errcheck:
-    check-blank: true
-    check-type-assertions: true
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/hackastak/repog
 
 run:
   timeout: 5m

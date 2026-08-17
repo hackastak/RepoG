@@ -216,7 +216,7 @@ func (o *OllamaEmbeddingProvider) EmbedQuery(ctx context.Context, query string) 
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 120 * time.Second} // Longer timeout for local processing
-	resp, err := client.Do(req)
+	resp, err := provider.DoWithRetry(ctx, client, req)
 	if err != nil {
 		return nil
 	}

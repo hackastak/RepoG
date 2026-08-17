@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -103,7 +102,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	var syncedCount, skippedCount, errorCount int
 
-	eventCh := sync.IngestRepos(context.Background(), sync.IngestOptions{
+	eventCh := sync.IngestRepos(commandContext(cmd), sync.IngestOptions{
 		IncludeOwned:   syncOwned,
 		IncludeStarred: syncStarred,
 		FullTree:       syncFullTree,

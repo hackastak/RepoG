@@ -201,7 +201,7 @@ func RecommendRepos(ctx context.Context, opts RecommendOptions) (RecommendResult
 	result.DurationMs = time.Since(start).Milliseconds()
 
 	if llmErr != nil {
-		return result, fmt.Errorf("%s", llmErr.Message)
+		return result, fmt.Errorf("generating recommendations: %w", llmErr)
 	}
 
 	result.InputTokens = llmResult.InputTokens

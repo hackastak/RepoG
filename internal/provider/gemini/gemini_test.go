@@ -63,8 +63,8 @@ func TestNewGeminiLLMProvider(t *testing.T) {
 		if p.model != "gemini-2.5-flash" {
 			t.Errorf("default model = %q, want %q", p.model, "gemini-2.5-flash")
 		}
-		if p.fallbackModel != "gemini-3.0-flash" {
-			t.Errorf("default fallbackModel = %q, want %q", p.fallbackModel, "gemini-3.0-flash")
+		if p.fallbackModel != "gemini-2.0-flash" {
+			t.Errorf("default fallbackModel = %q, want %q", p.fallbackModel, "gemini-2.0-flash")
 		}
 	})
 }
@@ -78,9 +78,13 @@ func TestGeminiLLMProvider_Name(t *testing.T) {
 
 func TestGeminiLLMProvider_Call_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The key and model appear in the URL.
-		if !strings.Contains(r.URL.RawQuery, "key=key") {
-			t.Errorf("expected key in query, got %q", r.URL.RawQuery)
+		// The key travels in a header, never the URL, so it can't leak into a
+		// *url.Error. The model still appears in the path.
+		if got := r.Header.Get("x-goog-api-key"); got != "key" {
+			t.Errorf("expected key in x-goog-api-key header, got %q", got)
+		}
+		if strings.Contains(r.URL.RawQuery, "key=") {
+			t.Errorf("api key must not appear in the URL query, got %q", r.URL.RawQuery)
 		}
 		if !strings.Contains(r.URL.Path, "primary-model") {
 			t.Errorf("expected model in path, got %q", r.URL.Path)
