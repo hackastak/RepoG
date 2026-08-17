@@ -57,12 +57,14 @@ type syncView struct {
 	embBatch, embBatchTotal                    int
 
 	// Carried progress across a suspend (ADR-011), so resume shows a continuous
-	// count rather than restarting from zero. seenRepos dedupes per-repo events so
-	// a resumed sync's re-emitted skips don't double-count repos already tallied.
+	// count rather than restarting from zero. repoOutcome remembers each repo's
+	// last tallied outcome so a resumed sync's re-emitted events don't double-count
+	// — and so a repo that errored before the suspend and succeeds on resume moves
+	// from the error tally to the synced one instead of being stuck as an error.
 	// For embed the resumed pipeline reports only un-embedded chunks, so a batch
 	// baseline is added to the run's cumulative counts; embCarrying marks a run
 	// that is continuing a suspended embed.
-	seenRepos                                                  map[string]bool
+	repoOutcome                                                map[string]syncOutcome
 	embCarrying                                                bool
 	baseEmbedded, baseEmbErrored, baseEmbSkipped, baseEmbTotal int
 
@@ -341,21 +343,71 @@ func (v *syncView) renderLog() string {
 	return strings.Join(v.lines, "\n")
 }
 
-// markSeen records a repo in the per-operation dedup set and reports whether it
-// was already present. It lets a resumed sync ignore repos it already tallied
-// (they re-appear as skip events on the re-run). A fresh run starts with an empty
-// set; an empty repo name is never deduped.
-func (v *syncView) markSeen(repo string) bool {
-	if repo == "" {
-		return false
+// syncOutcome is the terminal result tallied for a repo during a sync, tracked
+// per repo so a resumed run can reconcile re-emitted events (see recordOutcome).
+type syncOutcome int
+
+const (
+	outcomeNone    syncOutcome = iota // not yet tallied
+	outcomeSynced                     // counted in syncSynced
+	outcomeSkipped                    // counted in syncSkipped
+	outcomeError                      // counted in syncErrors
+)
+
+// recordOutcome folds a repo's terminal outcome into the running tallies and
+// reports whether the caller should surface it (log a line) as a fresh event.
+//
+// It exists for resume: the re-run re-emits every repo, so a repo already tallied
+// with the same outcome must not be counted again. Crucially it also handles a
+// changed outcome — a repo that errored before the suspend and succeeds on resume
+// is moved from syncErrors to syncSynced rather than being stuck as an error.
+// A fresh run starts with an empty map; an empty repo name is never deduped.
+func (v *syncView) recordOutcome(repo string, outcome syncOutcome) bool {
+	counter := func(o syncOutcome) *int {
+		switch o {
+		case outcomeSynced:
+			return &v.syncSynced
+		case outcomeSkipped:
+			return &v.syncSkipped
+		case outcomeError:
+			return &v.syncErrors
+		default:
+			return nil
+		}
 	}
-	if v.seenRepos == nil {
-		v.seenRepos = make(map[string]bool)
-	}
-	if v.seenRepos[repo] {
+	apply := func(prev syncOutcome) bool {
+		if prev == outcome {
+			return false // already tallied with this outcome
+		}
+		// A prior success/skip is sticky: this repo's real work was already
+		// accounted for by the operation, so a resume re-emitting it (a completed
+		// repo re-appears as an unchanged "skip") must not move or re-count it.
+		// Only a prior error is provisional — resume retries it and reclassifies
+		// once it succeeds, decrementing the stale error before the new tally.
+		if prev == outcomeSynced || prev == outcomeSkipped {
+			return false
+		}
+		if c := counter(prev); c != nil { // prev is outcomeError
+			*c--
+		}
+		if c := counter(outcome); c != nil {
+			*c++
+		}
 		return true
 	}
-	v.seenRepos[repo] = true
+
+	if repo == "" {
+		return apply(outcomeNone) // can't dedupe an unnamed repo; always fresh
+	}
+	if v.repoOutcome == nil {
+		v.repoOutcome = make(map[string]syncOutcome)
+	}
+	// Only record the outcome we actually tallied. When a sticky prior wins, the
+	// map must keep reflecting the counted outcome, not the one we ignored.
+	if changed := apply(v.repoOutcome[repo]); changed {
+		v.repoOutcome[repo] = outcome
+		return true
+	}
 	return false
 }
 
@@ -380,11 +432,11 @@ func (v *syncView) beginSync(chain bool) tea.Cmd {
 	v.running = true
 	v.chain = chain
 	v.err = nil
-	// On a fresh run reset the tallies and the per-repo dedup set; on resume keep
-	// both so already-synced repos (re-emitted as skips) aren't double-counted.
+	// On a fresh run reset the tallies and the per-repo outcome map; on resume keep
+	// both so already-tallied repos (re-emitted on the re-run) aren't double-counted.
 	if !resuming {
 		v.syncSynced, v.syncSkipped, v.syncErrors = 0, 0, 0
-		v.seenRepos = make(map[string]bool)
+		v.repoOutcome = make(map[string]syncOutcome)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	v.streamCtx = ctx
@@ -445,10 +497,9 @@ func (v *syncView) handleSyncEvent(msg syncEventMsg) (view, tea.Cmd) {
 	}
 	switch ev := msg.ev; ev.Type {
 	case "repo":
-		if v.markSeen(ev.Repo) {
-			break // already tallied (e.g. re-emitted after a resume)
+		if !v.recordOutcome(ev.Repo, outcomeSynced) {
+			break // already tallied as synced (e.g. re-emitted after a resume)
 		}
-		v.syncSynced++
 		label := "new"
 		if ev.Status == "updated" {
 			label = "updated"
@@ -457,16 +508,12 @@ func (v *syncView) handleSyncEvent(msg syncEventMsg) (view, tea.Cmd) {
 	case "skip":
 		// Skips are common (unchanged repos); track the count but keep them out
 		// of the log so the interesting events stay visible. A resumed run re-emits
-		// already-synced repos as skips — markSeen keeps them from double-counting.
-		if v.markSeen(ev.Repo) {
-			break
-		}
-		v.syncSkipped++
+		// already-synced repos as skips — recordOutcome keeps them from double-counting.
+		v.recordOutcome(ev.Repo, outcomeSkipped)
 	case "error":
-		if v.markSeen(ev.Repo) {
+		if !v.recordOutcome(ev.Repo, outcomeError) {
 			break
 		}
-		v.syncErrors++
 		v.appendLine(errStyle.Render("✗ ") + ev.Repo + helpStyle.Render(" ("+ev.Reason+")"))
 	case "done":
 		// Counts are derived incrementally (and deduped across a resume), so the

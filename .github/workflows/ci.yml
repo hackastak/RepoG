@@ -20,7 +20,9 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          # Pinned so a new linter release can't fail CI on an unrelated PR. Bump
+          # deliberately, keeping it in step with the version contributors run locally.
+          version: v2.11.3
 
   test:
     name: Test

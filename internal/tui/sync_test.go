@@ -387,7 +387,8 @@ func TestSyncViewResumeCarriesEmbedCounts(t *testing.T) {
 
 // TestSyncViewResumeDedupesSyncedRepos confirms a resumed sync doesn't
 // double-count repos it already tallied before the suspend: the re-run re-emits
-// them (as repo/skip events) and markSeen filters them out.
+// them (as repo/skip events) and recordOutcome keeps a completed repo's tally
+// sticky — beta stays counted as synced even though resume re-reports it as a skip.
 func TestSyncViewResumeDedupesSyncedRepos(t *testing.T) {
 	v := newSyncView(&appContext{})
 	v.running = true
@@ -423,6 +424,48 @@ func TestSyncViewResumeDedupesSyncedRepos(t *testing.T) {
 	}
 	if v.syncSkipped != 0 {
 		t.Fatalf("expected already-seen beta not to be counted as a skip, got %d", v.syncSkipped)
+	}
+}
+
+// TestSyncViewResumeReclassifiesErroredRepo confirms a repo that errored before
+// the suspend and succeeds on resume moves from the error tally to the synced one,
+// rather than being stuck as an error (and double-counted). Only a prior error is
+// provisional this way; a completed synced/skipped repo stays sticky.
+func TestSyncViewResumeReclassifiesErroredRepo(t *testing.T) {
+	v := newSyncView(&appContext{})
+	v.running = true
+	v.phase = phaseSyncing
+	v.gen = 1
+
+	feed := func(gen int, ev sync.IngestEvent) {
+		updated, _ := v.Update(syncEventMsg{gen: gen, ev: ev})
+		v = updated.(*syncView)
+	}
+	// alpha succeeds, beta fails on the first pass.
+	feed(1, sync.IngestEvent{Type: "repo", Repo: "me/alpha", Status: "new"})
+	feed(1, sync.IngestEvent{Type: "error", Repo: "me/beta", Reason: "rate limited"})
+	if v.syncSynced != 1 || v.syncErrors != 1 {
+		t.Fatalf("before suspend: synced=%d errors=%d, want 1 and 1", v.syncSynced, v.syncErrors)
+	}
+
+	// Suspend then resume.
+	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	v = updated.(*syncView)
+	updated, _ = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	v = updated.(*syncView)
+
+	// The re-run re-emits alpha (sticky success) as a skip, and beta now succeeds.
+	feed(v.gen, sync.IngestEvent{Type: "skip", Repo: "me/alpha", Reason: "unchanged"})
+	feed(v.gen, sync.IngestEvent{Type: "repo", Repo: "me/beta", Status: "new"})
+
+	if v.syncErrors != 0 {
+		t.Errorf("expected beta's cleared error to drop off the error tally, got errors=%d", v.syncErrors)
+	}
+	if v.syncSynced != 2 {
+		t.Errorf("expected alpha (sticky) + beta (reclassified) = 2 synced, got %d", v.syncSynced)
+	}
+	if v.syncSkipped != 0 {
+		t.Errorf("expected alpha to stay synced, not move to skipped, got skipped=%d", v.syncSkipped)
 	}
 }
 
