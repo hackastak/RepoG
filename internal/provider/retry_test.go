@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -115,6 +116,76 @@ func TestDoWithRetry_DoesNotRetryNonRetryableStatus(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Errorf("server hit %d times, want 1 (401 is not retryable)", calls)
+	}
+}
+
+func TestDoWithRetry_DoesNotRetryUnrewindableBody(t *testing.T) {
+	withFastRetries(t)
+
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusServiceUnavailable) // retryable, but the body can't be rewound
+	}))
+	defer server.Close()
+
+	// A body with no GetBody: retrying would resend an already-consumed reader and
+	// truncate the payload, so the helper must return the first result unretried.
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, server.URL, nil)
+	if err != nil {
+		t.Fatalf("building request: %v", err)
+	}
+	req.Body = io.NopCloser(strings.NewReader("payload"))
+	req.GetBody = nil
+
+	resp, derr := DoWithRetry(context.Background(), server.Client(), req)
+	if derr != nil {
+		t.Fatalf("unexpected error: %v", derr)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("StatusCode = %d, want 503", resp.StatusCode)
+	}
+	if calls != 1 {
+		t.Errorf("server hit %d times, want 1 (an unrewindable body must not be retried)", calls)
+	}
+}
+
+func TestDoWithRetry_CapsRetryAfter(t *testing.T) {
+	withFastRetries(t) // retryMaxDelay is 5ms here
+
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			// An unreasonable Retry-After: uncapped this would sleep an hour.
+			w.Header().Set("Retry-After", "3600")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	start := time.Now()
+	resp, err := DoWithRetry(context.Background(), server.Client(), newPostRequest(t, server.URL))
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("StatusCode = %d, want 200", resp.StatusCode)
+	}
+	if calls != 2 {
+		t.Errorf("server hit %d times, want 2", calls)
+	}
+	// Capped at retryMaxDelay (5ms), the retry fires almost immediately rather
+	// than honoring the literal 3600s. A generous ceiling avoids CI flakiness.
+	if elapsed > time.Second {
+		t.Errorf("retry waited %v; Retry-After was not capped at retryMaxDelay", elapsed)
 	}
 }
 

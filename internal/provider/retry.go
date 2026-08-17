@@ -56,7 +56,9 @@ func retryableStatus(code int) bool {
 // The request body is restored from req.GetBody before each retry, since the
 // prior attempt consumed it. http.NewRequestWithContext sets GetBody
 // automatically for the *bytes.Reader / *bytes.Buffer / *strings.Reader bodies
-// these providers build, so callers need no extra wiring.
+// these providers build, so callers need no extra wiring. A request that carries
+// a body it cannot rewind (Body set, GetBody nil) is never retried — resending a
+// consumed body would truncate the payload — so the first result is returned as-is.
 func DoWithRetry(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	var err error
@@ -84,10 +86,20 @@ func DoWithRetry(ctx context.Context, client *http.Client, req *http.Request) (*
 			return resp, err
 		}
 
+		// A body we can't rewind must not be retried: the next Do would resend an
+		// already-consumed reader and the server would see a truncated payload.
+		// Hand the retryable result back unretried rather than corrupt the request.
+		if req.Body != nil && req.GetBody == nil {
+			return resp, err
+		}
+
 		delay := backoffDelay(attempt)
 		if resp != nil {
 			if ra := retryAfter(resp.Header); ra > 0 {
-				delay = ra
+				// Honor Retry-After, but cap it at retryMaxDelay so a server
+				// returning an unreasonable value (e.g. "3600") can't park a whole
+				// pipeline for an hour on one batch.
+				delay = min(ra, retryMaxDelay)
 			}
 			// Drain and close so the connection returns to the pool.
 			_, _ = io.Copy(io.Discard, resp.Body)
