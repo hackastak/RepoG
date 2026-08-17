@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-16
+
 ### Added
 
 - **Retry with backoff on provider API calls.** Every embedding and generation request now routes through a shared `provider.DoWithRetry` helper that retries transient failures — network errors and HTTP 429/5xx — with jittered exponential backoff, honoring a `Retry-After` header when the server sends one and returning immediately on context cancellation. Previously the AI providers had no retry at all, unlike the GitHub client, so a single rate-limit response permanently failed that batch of embeddings and the pipeline marched through every remaining batch failing instantly. All six providers share the one helper.
@@ -171,7 +173,8 @@ Initial public release of RepoG, rewritten in Go.
   - CI pipeline with test coverage requirements
   - GoReleaser for automated releases
 
-[Unreleased]: https://github.com/hackastak/repog/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/hackastak/repog/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/hackastak/repog/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/hackastak/repog/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/hackastak/repog/releases/tag/v0.2.4
 [0.2.3]: https://github.com/hackastak/repog/releases/tag/v0.2.3
