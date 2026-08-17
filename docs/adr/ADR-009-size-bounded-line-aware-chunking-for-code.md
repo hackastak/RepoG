@@ -4,7 +4,7 @@
 
 ## Status
 
-`Deferred to V0.4.0` (2026-06-11) — was Draft for V0.3.0. Full code base syncing (ADR-008 clone + this chunking work) was split out of V0.3.0, which now ships the TUI only ([ADR-010](./ADR-010-use-bubbletea-for-the-tui.md)). The analysis and Option A decision below stand and carry forward to the V0.4.0 deep-sync build. See [PRD_V0.3.0 §4.4, Open Question #3/#4](../../../My_Notes/1.%20Projects/RepoG/PRD_V0.3.0.md).
+`Deferred to V0.5.0` (2026-06-11) — was Draft for V0.3.0. Full code base syncing (ADR-008 clone + this chunking work) was split out of V0.3.0, which ships the TUI only ([ADR-010](./ADR-010-use-bubbletea-for-the-tui.md)); it was then rescheduled from V0.4.0 to V0.5.0 once V0.4.0 landed as provider-hardening. The analysis and Option A decision below stand and carry forward to the V0.5.0 deep-sync build. See [PRD_V0.3.0 §4.4, Open Question #3/#4](../../../My_Notes/1.%20Projects/RepoG/PRD_V0.3.0.md).
 
 ---
 

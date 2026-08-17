@@ -2,7 +2,7 @@
 
 AI-powered knowledge base for your GitHub repositories.
 
-[![CI](https://github.com/hackastak/RepoG/actions/workflows/ci.yml/badge.svg)](https://github.com/hackastak/RepoG/actions/workflows/ci.yml)
+[![CI](https://github.com/hackastak/repog/actions/workflows/ci.yml/badge.svg)](https://github.com/hackastak/repog/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hackastak/repog)](https://goreportcard.com/report/github.com/hackastak/repog)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 

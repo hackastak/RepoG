@@ -4,7 +4,7 @@
 
 ## Status
 
-`Decided` (2026-06-10) — **implementation deferred to V0.4.0** (2026-06-11). The clone-strategy decision below stands; full code base syncing was split out of V0.3.0 (now TUI-only, see [ADR-010](./ADR-010-use-bubbletea-for-the-tui.md)) so the TUI ships on its own predictable scope and deep sync's embedding-cost/quality trade-offs get a dedicated release. Resolves [PRD_V0.3.0 Open Question #1](../../../My_Notes/1.%20Projects/RepoG/PRD_V0.3.0.md).
+`Decided` (2026-06-10) — **implementation deferred to V0.5.0**. Originally split out of V0.3.0 to V0.4.0 (2026-06-11), then rescheduled again once V0.4.0 landed as provider-hardening rather than deep sync. The clone-strategy decision below stands; full code base syncing was split out of V0.3.0 (now TUI-only, see [ADR-010](./ADR-010-use-bubbletea-for-the-tui.md)) so the TUI ships on its own predictable scope and deep sync's embedding-cost/quality trade-offs get a dedicated release. Resolves [PRD_V0.3.0 Open Question #1](../../../My_Notes/1.%20Projects/RepoG/PRD_V0.3.0.md).
 
 ---
 

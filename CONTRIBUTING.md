@@ -70,12 +70,16 @@ repog/
 │   ├── db/             # SQLite database, schema, migrations
 │   ├── embed/          # Embedding pipeline
 │   ├── format/         # Output formatting utilities
-│   ├── gemini/         # Gemini API client (embeddings + LLM)
 │   ├── github/         # GitHub API client
+│   ├── provider/       # Provider abstraction + self-registering vendor
+│   │                   #   subpackages (gemini, openai, anthropic,
+│   │                   #   voyageai, openrouter, ollama)
 │   ├── recommend/      # Repository recommendations
 │   ├── search/         # Vector similarity search
+│   ├── status/         # Knowledge-base statistics
 │   ├── summarize/      # Repository summarization
-│   └── sync/           # Repository content ingestion
+│   ├── sync/           # Repository content ingestion
+│   └── tui/            # Bubble Tea TUI (presentation layer)
 ├── .github/workflows/  # CI configuration
 ├── .goreleaser.yaml    # Release configuration
 └── go.mod              # Go module definition

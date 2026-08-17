@@ -4,7 +4,7 @@
 
 ## Status
 
-`Decided` (2026-06-12) — the **sole V0.3.0 deliverable**: full code base syncing ([ADR-008](./ADR-008-shell-to-system-git-for-deep-sync-cloning.md) / [ADR-009](./ADR-009-size-bounded-line-aware-chunking-for-code.md)) was deferred to V0.4.0 (2026-06-11), so V0.3.0 ships the TUI on its own. Confirmed by the developer: Bubbletea is the chosen framework; the added binary size and new dependencies are a calculated cost, far outweighed by the improved user experience. See [PRD_V0.3.0 §4.3, Open Question #5](../../../My_Notes/1.%20Projects/RepoG/PRD_V0.3.0.md).
+`Decided` (2026-06-12) — the **sole V0.3.0 deliverable**: full code base syncing ([ADR-008](./ADR-008-shell-to-system-git-for-deep-sync-cloning.md) / [ADR-009](./ADR-009-size-bounded-line-aware-chunking-for-code.md)) was deferred out of V0.3.0 (2026-06-11) — since rescheduled to V0.5.0 — so V0.3.0 ships the TUI on its own. Confirmed by the developer: Bubbletea is the chosen framework; the added binary size and new dependencies are a calculated cost, far outweighed by the improved user experience. See [PRD_V0.3.0 §4.3, Open Question #5](../../../My_Notes/1.%20Projects/RepoG/PRD_V0.3.0.md).
 
 ---
 

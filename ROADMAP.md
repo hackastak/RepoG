@@ -7,7 +7,8 @@ It is a statement of intent, not a commitment — priorities and timing can shif
 For released changes see the [Changelog](CHANGELOG.md); for day-to-day work see the
 [issues page](https://github.com/hackastak/repog/issues).
 
-**Current release:** `v0.3.0` (interactive TUI). RepoG is pre-`v1.0.0`, so it follows
+**Current release:** `v0.4.0` (provider retry/backoff, TUI suspend/resume/cancel, and
+hardening). RepoG is pre-`v1.0.0`, so it follows
 [Semantic Versioning](https://semver.org/) with breaking changes called out in the
 [Upgrade notes](docs/UPGRADING.md).
 
